@@ -1,0 +1,110 @@
+import Database from "better-sqlite3";
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import path from "node:path";
+import * as schema from "./schema";
+
+const DB_PATH = path.join(process.cwd(), "clientpilot.db");
+
+// Reuse the connection across hot reloads in dev.
+const globalForDb = globalThis as unknown as {
+  __clientpilot_sqlite?: Database.Database;
+};
+
+// `timeout` sets SQLite's busy_timeout so concurrent Next.js build workers
+// opening this same file wait instead of immediately throwing SQLITE_BUSY.
+const sqlite = globalForDb.__clientpilot_sqlite ?? new Database(DB_PATH, { timeout: 10000 });
+globalForDb.__clientpilot_sqlite = sqlite;
+
+sqlite.pragma("journal_mode = WAL");
+sqlite.pragma("foreign_keys = ON");
+
+sqlite.exec(`
+CREATE TABLE IF NOT EXISTS leads (
+  id TEXT PRIMARY KEY,
+  company TEXT NOT NULL,
+  domain TEXT NOT NULL UNIQUE,
+  country TEXT,
+  industry TEXT,
+  source TEXT NOT NULL,
+  source_meta TEXT NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL DEFAULT 'queued',
+  archive_reason TEXT,
+  score INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS audits (
+  id TEXT PRIMARY KEY,
+  lead_id TEXT NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+  fetched_at INTEGER NOT NULL,
+  http_status INTEGER,
+  title TEXT,
+  h1 TEXT,
+  meta_desc TEXT,
+  tech TEXT NOT NULL DEFAULT '[]',
+  problems TEXT NOT NULL DEFAULT '[]',
+  page_bytes INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS contacts (
+  id TEXT PRIMARY KEY,
+  lead_id TEXT NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+  name TEXT,
+  role TEXT,
+  email TEXT NOT NULL,
+  confidence TEXT NOT NULL,
+  source_url TEXT
+);
+
+CREATE TABLE IF NOT EXISTS outreach (
+  id TEXT PRIMARY KEY,
+  lead_id TEXT NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL DEFAULT 'initial',
+  subject TEXT NOT NULL,
+  body TEXT NOT NULL,
+  service TEXT,
+  drafted_at INTEGER NOT NULL,
+  sent_at INTEGER,
+  replied_at INTEGER,
+  reply_class TEXT
+);
+
+CREATE TABLE IF NOT EXISTS settings (
+  id INTEGER PRIMARY KEY DEFAULT 1,
+  services TEXT NOT NULL DEFAULT '[]',
+  countries TEXT NOT NULL DEFAULT '[]',
+  min_score INTEGER NOT NULL DEFAULT 70,
+  daily_limit INTEGER NOT NULL DEFAULT 20,
+  portfolio_url TEXT NOT NULL DEFAULT '',
+  sender_name TEXT NOT NULL DEFAULT 'Hardik'
+);
+
+CREATE INDEX IF NOT EXISTS idx_leads_status_score ON leads(status, score DESC);
+CREATE INDEX IF NOT EXISTS idx_leads_domain ON leads(domain);
+CREATE INDEX IF NOT EXISTS idx_outreach_lead ON outreach(lead_id);
+`);
+
+const settingsRow = sqlite
+  .prepare("SELECT id FROM settings WHERE id = 1")
+  .get();
+if (!settingsRow) {
+  sqlite
+    .prepare(
+      `INSERT INTO settings (id, services, countries, min_score, daily_limit, portfolio_url, sender_name)
+       VALUES (1, ?, ?, 70, 20, '', 'Hardik')`
+    )
+    .run(
+      JSON.stringify([
+        "Landing Page Redesign",
+        "Mobile Optimization",
+        "Performance Tuning",
+        "SEO Basics",
+        "Trust & Conversion",
+      ]),
+      JSON.stringify(["USA", "UK", "India", "Canada", "Europe"])
+    );
+}
+
+export const db = drizzle(sqlite, { schema });
+export { sqlite };

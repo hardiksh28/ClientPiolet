@@ -1,0 +1,153 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f3f3f4;
+  --surface: #ffffff;
+  --surface-2: #ececee;
+  --border: #dedee1;
+  --foreground: #0c0c0d;
+  --muted: #5d5d63;
+  --muted-2: #8c8c92;
+
+  /* Category colors — one per discovery source, matching the reference's
+     one-color-per-role shift cards. Reused for evidence severity too. */
+  --green: #34c98e;
+  --green-border: #1f9d6b;
+  --green-soft: rgba(52, 201, 142, 0.14);
+  --green-on: #06281c;
+
+  --yellow: #f0c94c;
+  --yellow-border: #d1a828;
+  --yellow-soft: rgba(240, 201, 76, 0.16);
+  --yellow-on: #392c04;
+
+  --blue: #4c7ef3;
+  --blue-border: #3862cf;
+  --blue-soft: rgba(76, 126, 243, 0.16);
+  --blue-on: #ffffff;
+
+  --pink: #f2637e;
+  --pink-border: #d1465f;
+  --pink-soft: rgba(242, 99, 126, 0.16);
+  --pink-on: #ffffff;
+
+  --danger: #e0453a;
+  --danger-soft: #fbe7e5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #050506;
+    --surface: #131316;
+    --surface-2: #1c1c20;
+    --border: #29292e;
+    --foreground: #f6f6f7;
+    --muted: #a0a0a6;
+    --muted-2: #6c6c72;
+
+    --green: #34c98e;
+    --green-border: #23a877;
+    --green-soft: rgba(52, 201, 142, 0.16);
+    --green-on: #06281c;
+
+    --yellow: #f0c94c;
+    --yellow-border: #cfa72e;
+    --yellow-soft: rgba(240, 201, 76, 0.16);
+    --yellow-on: #392c04;
+
+    --blue: #5b8bff;
+    --blue-border: #4169e0;
+    --blue-soft: rgba(91, 139, 255, 0.18);
+    --blue-on: #ffffff;
+
+    --pink: #f2708a;
+    --pink-border: #d1506a;
+    --pink-soft: rgba(242, 112, 138, 0.16);
+    --pink-on: #2b0710;
+
+    --danger: #f2635a;
+    --danger-soft: rgba(242, 99, 90, 0.16);
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-2: var(--muted-2);
+
+  --color-green: var(--green);
+  --color-green-border: var(--green-border);
+  --color-green-soft: var(--green-soft);
+  --color-green-on: var(--green-on);
+  --color-yellow: var(--yellow);
+  --color-yellow-border: var(--yellow-border);
+  --color-yellow-soft: var(--yellow-soft);
+  --color-yellow-on: var(--yellow-on);
+  --color-blue: var(--blue);
+  --color-blue-border: var(--blue-border);
+  --color-blue-soft: var(--blue-soft);
+  --color-blue-on: var(--blue-on);
+  --color-pink: var(--pink);
+  --color-pink-border: var(--pink-border);
+  --color-pink-soft: var(--pink-soft);
+  --color-pink-on: var(--pink-on);
+
+  /* Back-compat aliases so existing accent/success/warning usages still resolve. */
+  --color-accent: var(--foreground);
+  --color-accent-2: var(--blue);
+  --color-accent-soft: var(--surface-2);
+  --color-success: var(--green);
+  --color-success-soft: var(--green-soft);
+  --color-warning: var(--yellow);
+  --color-warning-soft: var(--yellow-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+::selection {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.animate-pulse-dot {
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-rise-in {
+  animation: rise-in 0.35s ease-out both;
+}
