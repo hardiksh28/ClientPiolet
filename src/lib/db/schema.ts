@@ -65,4 +65,6 @@ export const settings = sqliteTable("settings", {
   dailyLimit: integer("daily_limit").notNull().default(20),
   portfolioUrl: text("portfolio_url").notNull().default(""),
   senderName: text("sender_name").notNull().default("Hardik"),
+  gmailRefreshToken: text("gmail_refresh_token"),
+  gmailConnectedEmail: text("gmail_connected_email"),
 });

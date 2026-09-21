@@ -1,4 +1,4 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { audits, contacts, leads, outreach, settings as settingsTable } from "@/lib/db/schema";
 
@@ -83,6 +83,63 @@ export function getLatestOutreachForLeads(leadIds: string[]): Map<string, Outrea
     if (!existing || row.draftedAt > existing.draftedAt) map.set(row.leadId, row);
   }
   return map;
+}
+
+export type NextActionItem = {
+  lead: LeadRow;
+  outreach: OutreachRow;
+  kind: "hot_reply" | "reply" | "followup_due";
+};
+
+/**
+ * "What should I do right now" — recently replied leads (freshest first)
+ * and sent leads whose day-4/day-9 follow-up window has opened with no
+ * reply yet. Deliberately lightweight: computed from existing columns, not
+ * a separate stored "next action" — see README for why.
+ */
+export function getNeedsAttention(limit = 6): NextActionItem[] {
+  const repliedRows = db
+    .select()
+    .from(outreach)
+    .where(sql`${outreach.repliedAt} is not null`)
+    .orderBy(desc(outreach.repliedAt))
+    .limit(limit)
+    .all();
+
+  const sentAwaitingRows = db
+    .select()
+    .from(outreach)
+    .where(sql`${outreach.sentAt} is not null and ${outreach.repliedAt} is null`)
+    .all();
+
+  const leadIds = [...new Set([...repliedRows, ...sentAwaitingRows].map((o) => o.leadId))];
+  const leadRows = leadIds.length
+    ? db.select().from(leads).where(inArray(leads.id, leadIds)).all()
+    : [];
+  const leadById = new Map(leadRows.map((l) => [l.id, l]));
+
+  const items: NextActionItem[] = [];
+
+  for (const o of repliedRows) {
+    const lead = leadById.get(o.leadId);
+    if (!lead) continue;
+    items.push({ lead, outreach: o, kind: o.replyClass === "hot" ? "hot_reply" : "reply" });
+  }
+
+  const now = Date.now();
+  for (const o of sentAwaitingRows) {
+    if (!o.sentAt) continue;
+    const days = Math.floor((now - o.sentAt) / (1000 * 60 * 60 * 24));
+    const dueForFollowup = (o.kind === "initial" && days >= 4) || (o.kind === "followup_1" && days >= 9);
+    if (!dueForFollowup) continue;
+    const lead = leadById.get(o.leadId);
+    if (!lead) continue;
+    items.push({ lead, outreach: o, kind: "followup_due" });
+  }
+
+  const rank = { hot_reply: 0, reply: 1, followup_due: 2 };
+  items.sort((a, b) => rank[a.kind] - rank[b.kind]);
+  return items.slice(0, limit);
 }
 
 export function getLeadDetail(id: string) {

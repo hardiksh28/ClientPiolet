@@ -19,6 +19,25 @@ const PLATFORM_DENYLIST = new Set([
 
 type ClearbitSuggestion = { name: string; domain: string; logo: string | null };
 
+function normalizeForMatch(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Clearbit's autocomplete is fuzzy and `data[0]` is not necessarily *the*
+ * company — for a common name like "Mercury" it could return any of several
+ * unrelated real companies. Auditing and emailing based on the wrong site's
+ * evidence would be a real correctness failure, not a cosmetic one, so we
+ * require the top suggestion's name to actually resemble the query before
+ * trusting it — otherwise we park the lead rather than guess.
+ */
+function looksLikeSameCompany(query: string, suggestion: string): boolean {
+  const q = normalizeForMatch(query);
+  const s = normalizeForMatch(suggestion);
+  if (!q || !s) return false;
+  return q === s || q.includes(s) || s.includes(q);
+}
+
 async function guessDomainFromCompanyName(company: string): Promise<string | null> {
   const data = await fetchJson<ClearbitSuggestion[]>(
     `https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(
@@ -27,7 +46,9 @@ async function guessDomainFromCompanyName(company: string): Promise<string | nul
     { timeoutMs: 5000 }
   );
   if (!data || data.length === 0) return null;
-  return canonicalizeDomain(data[0].domain);
+  const match = data.find((d) => looksLikeSameCompany(company, d.name));
+  if (!match) return null;
+  return canonicalizeDomain(match.domain);
 }
 
 /**

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Check, Copy, ExternalLink, Mail, MailCheck, X } from "lucide-react";
+import { Check, Copy, ExternalLink, Mail, MailCheck, RefreshCw, X } from "lucide-react";
 import {
   dismissLeadAction,
+  generateFollowupAction,
   markRepliedAction,
   markSentAction,
   updateDraftAction,
@@ -52,6 +53,12 @@ export function OutreachPanel({
     );
   }
 
+  // Gate editing/sending on this specific outreach message, not the lead's
+  // overall status — a freshly generated follow-up draft is editable and
+  // sendable even though the lead itself is already "sent" from the
+  // original message.
+  const draftIsPending = !outreach.sentAt;
+
   function handleSave() {
     startTransition(async () => {
       await updateDraftAction(outreach!.id, subject, body);
@@ -97,12 +104,18 @@ export function OutreachPanel({
 
   const sinceSent = outreach.sentAt ? daysSince(outreach.sentAt) : null;
   const followupDue = sinceSent !== null && !outreach.repliedAt ? (sinceSent >= 9 ? 2 : sinceSent >= 4 ? 1 : 0) : 0;
+  const canGenerateFollowup =
+    !draftIsPending && !outreach.repliedAt && followupDue > 0 && outreach.kind !== "followup_2";
+  const nextFollowupKind = outreach.kind === "initial" ? "followup_1" : "followup_2";
+  const closedNoReply = outreach.kind === "followup_2" && !draftIsPending && !outreach.repliedAt;
 
   return (
     <div className="space-y-4">
       <div className="rounded-[20px] bg-surface overflow-hidden">
         <div className="px-4 py-3 flex items-center justify-between">
-          <span className="text-[12px] font-bold text-muted-2 uppercase tracking-wide">Draft</span>
+          <span className="text-[12px] font-bold text-muted-2 uppercase tracking-wide">
+            Draft {outreach.kind !== "initial" && `— ${outreach.kind.replace("_", " ")}`}
+          </span>
           {dirty && (
             <button
               onClick={handleSave}
@@ -120,7 +133,7 @@ export function OutreachPanel({
               setSubject(e.target.value);
               setDirty(true);
             }}
-            disabled={lead.status !== "queued"}
+            disabled={!draftIsPending}
             className="w-full rounded-[14px] bg-surface-2 px-3.5 py-2.5 text-[13.5px] font-semibold outline-none focus:ring-2 focus:ring-foreground/20 transition disabled:opacity-70"
           />
           <textarea
@@ -129,7 +142,7 @@ export function OutreachPanel({
               setBody(e.target.value);
               setDirty(true);
             }}
-            disabled={lead.status !== "queued"}
+            disabled={!draftIsPending}
             rows={10}
             className="w-full resize-none rounded-[14px] bg-surface-2 px-3.5 py-3 text-[13px] leading-relaxed outline-none focus:ring-2 focus:ring-foreground/20 transition disabled:opacity-70"
           />
@@ -171,7 +184,7 @@ export function OutreachPanel({
           </span>
         )}
 
-        {lead.status === "queued" && (
+        {draftIsPending && (
           <button
             onClick={() => startTransition(() => markSentAction(lead.id, outreach.id))}
             disabled={isPending}
@@ -181,7 +194,7 @@ export function OutreachPanel({
             Mark as sent
           </button>
         )}
-        {lead.status === "queued" && (
+        {lead.status === "queued" && draftIsPending && (
           <button
             onClick={() => startTransition(() => dismissLeadAction(lead.id))}
             disabled={isPending}
@@ -199,40 +212,58 @@ export function OutreachPanel({
             <span className="text-[12px] font-bold text-muted-2 uppercase tracking-wide">
               Reply tracking
             </span>
-            {followupDue > 0 && (
+            {followupDue > 0 && !draftIsPending && !outreach.repliedAt && (
               <span className="rounded-full bg-yellow text-yellow-on px-2.5 py-1 text-[11px] font-bold">
                 Follow-up {followupDue} due
               </span>
             )}
           </div>
           <p className="text-[12.5px] text-muted">
-            Sent {sinceSent}d ago. Two follow-ups max (day 4, day 9), then it closes automatically.
+            {draftIsPending
+              ? "Draft ready — send it to start tracking."
+              : `Sent ${sinceSent}d ago. Two follow-ups max (day 4, day 9), then it closes automatically.`}
           </p>
-          <div className="flex flex-wrap gap-1.5">
-            {REPLY_CLASSES.map((rc) => (
-              <button
-                key={rc.value}
-                onClick={() =>
-                  startTransition(() => markRepliedAction(lead.id, outreach.id, rc.value))
-                }
-                disabled={isPending}
-                className="rounded-full bg-surface-2 px-3 py-1.5 text-[11.5px] font-semibold hover:bg-foreground hover:text-background transition disabled:opacity-50"
-              >
-                {rc.label}
-              </button>
-            ))}
-          </div>
+
+          {canGenerateFollowup && (
+            <button
+              onClick={() =>
+                startTransition(() => generateFollowupAction(lead.id, nextFollowupKind))
+              }
+              disabled={isPending}
+              className="inline-flex items-center gap-1.5 rounded-full bg-yellow text-yellow-on px-3.5 py-2 text-[12px] font-bold hover:opacity-90 transition disabled:opacity-50"
+            >
+              <RefreshCw size={13} />
+              Generate {nextFollowupKind.replace("_", " ")} draft
+            </button>
+          )}
+          {closedNoReply && (
+            <p className="text-[12px] text-muted-2">
+              Two follow-ups sent, no reply — this lead is closed.
+            </p>
+          )}
+
+          {!draftIsPending && (
+            <div className="flex flex-wrap gap-1.5">
+              {REPLY_CLASSES.map((rc) => (
+                <button
+                  key={rc.value}
+                  onClick={() =>
+                    startTransition(() => markRepliedAction(lead.id, outreach.id, rc.value))
+                  }
+                  disabled={isPending}
+                  className="rounded-full bg-surface-2 px-3 py-1.5 text-[11.5px] font-semibold hover:bg-foreground hover:text-background transition disabled:opacity-50"
+                >
+                  {rc.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {lead.status === "replied" && outreach.replyClass && (
-        <div
-          className={cn(
-            "rounded-[20px] p-4 text-[13px] font-bold",
-            "bg-green-soft text-green"
-          )}
-        >
-          Marked replied — {REPLY_CLASSES.find((r) => r.value === outreach.replyClass)?.label}
+        <div className={cn("rounded-[20px] p-4 text-[13px] font-bold", "bg-green-soft text-green")}>
+          Marked replied — {REPLY_CLASSES.find((r) => r.value === outreach.replyClass)?.label ?? "auto-detected"}
         </div>
       )}
     </div>

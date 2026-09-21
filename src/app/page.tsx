@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { ArrowUpRight, Inbox, MailCheck, MessagesSquare, Sparkles } from "lucide-react";
-import { getQueuedLeads, getRecentLeads, getStats } from "@/lib/data";
+import { ArrowUpRight, Flame, Inbox, MailCheck, MessagesSquare, RefreshCw, Sparkles } from "lucide-react";
+import { getNeedsAttention, getQueuedLeads, getRecentLeads, getSettings, getStats } from "@/lib/data";
 import { StatCard } from "@/components/stat-card";
 import { RunPipelineButton } from "@/components/run-pipeline-button";
+import { SyncRepliesButton } from "@/components/sync-replies-button";
 import { ScoreBadge, SourceBadge, StatusPill } from "@/components/badges";
 import { timeAgo } from "@/lib/utils";
 
@@ -19,6 +20,8 @@ export default async function HomePage() {
   const stats = getStats();
   const queuedLeads = getQueuedLeads(6);
   const recent = getRecentLeads(8);
+  const needsAttention = getNeedsAttention(6);
+  const gmailConnected = !!getSettings().gmailConnectedEmail;
 
   return (
     <div className="space-y-9">
@@ -29,7 +32,10 @@ export default async function HomePage() {
             10 minutes a day: read a draft, edit a line, send it yourself.
           </p>
         </div>
-        <RunPipelineButton />
+        <div className="flex items-start gap-2.5">
+          <SyncRepliesButton connected={gmailConnected} />
+          <RunPipelineButton />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -44,6 +50,47 @@ export default async function HomePage() {
         />
         <StatCard label="Total researched" value={stats.totalLeads} icon={Sparkles} hint={`${stats.archived} archived`} />
       </div>
+
+      {needsAttention.length > 0 && (
+        <section>
+          <h2 className="text-[15px] font-bold mb-3.5 flex items-center gap-1.5">
+            <Flame size={15} className="text-pink" />
+            Needs attention
+          </h2>
+          <div className="rounded-[20px] bg-surface overflow-hidden">
+            {needsAttention.map((item) => (
+              <Link
+                key={item.outreach.id}
+                href={`/leads/${item.lead.id}`}
+                className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-surface-2 transition"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  {item.kind === "followup_due" ? (
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-yellow text-yellow-on">
+                      <RefreshCw size={13} />
+                    </span>
+                  ) : (
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-pink text-pink-on">
+                      <Flame size={13} />
+                    </span>
+                  )}
+                  <span className="font-semibold text-[13px] truncate">{item.lead.company}</span>
+                  <span className="hidden sm:inline text-[12px] text-muted truncate">
+                    {item.kind === "followup_due"
+                      ? `Follow-up ready (${item.outreach.kind === "initial" ? "day 4" : "day 9"})`
+                      : item.kind === "hot_reply"
+                      ? "Hot reply — wants to talk"
+                      : "Replied"}
+                  </span>
+                </div>
+                <span className="text-[11px] text-muted-2 shrink-0">
+                  {item.outreach.repliedAt ? timeAgo(item.outreach.repliedAt) : "action needed"}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section>
         <div className="flex items-center justify-between mb-3.5">

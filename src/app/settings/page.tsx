@@ -1,10 +1,15 @@
 import { getSettings } from "@/lib/data";
 import { SettingsForm } from "@/components/settings-form";
+import { GmailConnect } from "@/components/gmail-connect";
+import { isGmailConfigured } from "@/lib/gmail/oauth";
 
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage() {
+export default async function SettingsPage({ searchParams }: PageProps<"/settings">) {
   const settings = getSettings();
+  const params = await searchParams;
+  const justConnected = params.gmail_connected === "1";
+  const error = typeof params.gmail_error === "string" ? params.gmail_error : null;
 
   return (
     <div className="space-y-6">
@@ -14,6 +19,14 @@ export default async function SettingsPage() {
           Services, threshold, and the details that go on every draft.
         </p>
       </div>
+
+      <GmailConnect
+        configured={isGmailConfigured()}
+        connectedEmail={settings.gmailConnectedEmail}
+        justConnected={justConnected}
+        error={error}
+      />
+
       <SettingsForm
         initial={{
           services: JSON.parse(settings.services),

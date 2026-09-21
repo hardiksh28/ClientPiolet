@@ -1,10 +1,13 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { leads, outreach, settings as settingsTable } from "@/lib/db/schema";
 import { reconsiderArchivedLeads, runPipeline } from "@/lib/pipeline/run";
+import { syncGmailReplies, type GmailSyncResult } from "@/lib/pipeline/gmail-sync";
+import { draftFollowup } from "@/lib/pipeline/draft";
 import type { PipelineRunSummary } from "@/lib/pipeline/types";
 
 export async function runPipelineAction(): Promise<PipelineRunSummary> {
@@ -56,6 +59,47 @@ export async function markRepliedAction(
 export async function updateDraftAction(outreachId: string, subject: string, body: string) {
   db.update(outreach).set({ subject, body }).where(eq(outreach.id, outreachId)).run();
   revalidatePath("/leads");
+}
+
+export async function generateFollowupAction(leadId: string, kind: "followup_1" | "followup_2") {
+  const lead = db.select().from(leads).where(eq(leads.id, leadId)).get();
+  if (!lead) throw new Error("Lead not found");
+  const settingsRow = db.select().from(settingsTable).where(eq(settingsTable.id, 1)).get();
+  const senderName = settingsRow?.senderName ?? "Hardik";
+
+  const draft = draftFollowup(kind, lead.company, senderName);
+  const now = Date.now();
+  db.insert(outreach)
+    .values({
+      id: randomUUID(),
+      leadId,
+      kind,
+      subject: draft.subject,
+      body: draft.body,
+      service: null,
+      draftedAt: now,
+    })
+    .run();
+
+  revalidatePath("/");
+  revalidatePath("/leads");
+  revalidatePath(`/leads/${leadId}`);
+}
+
+export async function syncGmailRepliesAction(): Promise<GmailSyncResult> {
+  const result = await syncGmailReplies();
+  revalidatePath("/");
+  revalidatePath("/leads");
+  revalidatePath("/analytics");
+  return result;
+}
+
+export async function disconnectGmailAction() {
+  db.update(settingsTable)
+    .set({ gmailRefreshToken: null, gmailConnectedEmail: null })
+    .where(eq(settingsTable.id, 1))
+    .run();
+  revalidatePath("/settings");
 }
 
 export async function updateSettingsAction(data: {

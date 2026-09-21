@@ -85,6 +85,19 @@ CREATE INDEX IF NOT EXISTS idx_leads_domain ON leads(domain);
 CREATE INDEX IF NOT EXISTS idx_outreach_lead ON outreach(lead_id);
 `);
 
+// Lightweight migrations: add columns that didn't exist in earlier versions
+// of this file. SQLite has no "ADD COLUMN IF NOT EXISTS", so check first.
+const settingsColumns = sqlite.prepare("PRAGMA table_info(settings)").all() as {
+  name: string;
+}[];
+const settingsColumnNames = new Set(settingsColumns.map((c) => c.name));
+if (!settingsColumnNames.has("gmail_refresh_token")) {
+  sqlite.exec("ALTER TABLE settings ADD COLUMN gmail_refresh_token TEXT");
+}
+if (!settingsColumnNames.has("gmail_connected_email")) {
+  sqlite.exec("ALTER TABLE settings ADD COLUMN gmail_connected_email TEXT");
+}
+
 const settingsRow = sqlite
   .prepare("SELECT id FROM settings WHERE id = 1")
   .get();

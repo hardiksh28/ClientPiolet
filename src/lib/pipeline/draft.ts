@@ -40,20 +40,26 @@ function offerLine(service: string): string {
   return offers[service] ?? "Happy to put together a quick fix if useful — want me to send it?";
 }
 
+// Deliberately hedged: these are possible implications of what was
+// observed, not measured facts about visitor behaviour, traffic, or
+// revenue. A crawler can see a missing viewport tag; it cannot see whether
+// anyone actually bounced because of it. Stating the latter as fact would
+// be a claim the audit has no evidence for — see evidenceLine() for what's
+// actually verifiable.
 function implicationLine(topProblem: Problem): string {
   const implications: Record<string, string> = {
-    NOT_MOBILE_READY: "Most visitors on mobile are probably bouncing before they read anything.",
-    UNCLEAR_VALUE_PROP: "New visitors likely leave without understanding what you actually do.",
-    NO_CLEAR_CTA: "Visitors who are interested may not have an obvious next step.",
-    WEAK_SEO: "That's likely costing you some organic search traffic.",
-    BROKEN_LINKS: "That's a rough first impression for anyone poking around.",
-    SLOW_SITE: "That's a meaningful drag on conversion, especially on mobile connections.",
-    OUTDATED_BUILD: "It probably reads as dated compared to competitors.",
-    NO_TRUST_SIGNALS: "Visitors on the fence have nothing to reassure them.",
-    INSECURE: "Some browsers will actively warn visitors before they can even see the page.",
-    NO_MEASUREMENT: "Hard to know what's working without any visibility into visitor behaviour.",
+    NOT_MOBILE_READY: "Might be worth checking how that actually renders on a phone.",
+    UNCLEAR_VALUE_PROP: "Worth double-checking a first-time visitor gets what you do right away.",
+    NO_CLEAR_CTA: "Could be worth adding one so there's an obvious next step.",
+    WEAK_SEO: "Worth a look before it affects how the page shows up in search.",
+    BROKEN_LINKS: "Usually a quick fix once you know where they are.",
+    SLOW_SITE: "Might be worth a look, especially for anyone on a slower connection.",
+    OUTDATED_BUILD: "Might be worth a refresh if you want it to feel current.",
+    NO_TRUST_SIGNALS: "Could be worth adding if you've got any proof points to show.",
+    INSECURE: "Worth fixing — some browsers flag this before the page even loads.",
+    NO_MEASUREMENT: "Might be worth adding if you want visibility into what's working.",
   };
-  return implications[topProblem.tag] ?? "Small thing, but it adds up.";
+  return implications[topProblem.tag] ?? "Small thing, but might be worth a look.";
 }
 
 export type Draft = {
