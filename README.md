@@ -1,8 +1,9 @@
 # ClientPilot
 
 Research-and-drafting machine for freelance outreach. It discovers companies, audits their
-websites for concrete problems, scores the opportunity, and drafts a cold email — **it never
-sends anything itself.** You read the draft, edit a line, and click "Open in Gmail" yourself.
+websites for concrete problems, optionally runs them past an AI opportunity check, scores the
+opportunity, and drafts a cold email — **it never sends anything itself.** You read the draft,
+edit a line, and click "Open in Gmail" yourself.
 
 Full plan: [`ClientPilot-Plan-Architecture.pdf`](./ClientPilot-Plan-Architecture.pdf).
 
@@ -19,9 +20,12 @@ Full plan: [`ClientPilot-Plan-Architecture.pdf`](./ClientPilot-Plan-Architecture
   - `audit.ts` — real `fetch` + `cheerio`, the 10 deterministic detection rules from the plan
   - `contact.ts` — mailto / Cloudflare-obfuscated email / `/contact` page, no pattern-guessing
   - `score.ts` — the exact 0–100 scoring formula from the plan
-  - `draft.ts` — template + evidence → email draft (no AI, per the plan)
+  - `draft.ts` — template + evidence → email draft (deterministic; see `src/lib/ai/` for the
+    optional AI layer that decides *whether* to draft at all)
   - `gmail-sync.ts` — optional, read-only: checks your inbox for replies from leads you've sent
     to and auto-classifies them (see below)
+- `src/lib/ai/` — optional Groq opportunity-qualification layer, see below. Everything above
+  this line works identically with zero AI configuration.
 
 ## Running it
 
@@ -50,6 +54,29 @@ etc.) rather than queued.
 - `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` — from a Google Cloud OAuth client (Gmail API,
   read-only scope). Without these, the "Connect Gmail" button in Settings explains what's
   missing; everything else works fine without it.
+- `GROQ_API_KEY` — free from [console.groq.com/keys](https://console.groq.com/keys). Without it,
+  the pipeline is pure deterministic score + deterministic draft, exactly as before this was
+  added (verified: a full pipeline run with no key set behaves identically). `GROQ_MODEL_HEAVY` /
+  `GROQ_MODEL_LIGHT` and `AI_MAX_LEADS_PER_RUN` are optional overrides — see `.env.example`.
+
+## AI opportunity analysis (optional)
+
+After a lead clears every deterministic gate (audit found real problems, contact found, score
+above threshold), and only then, Groq (`openai/gpt-oss-120b` by default) reads a compact
+structured-evidence object — company, source, source metadata, website title/H1/meta, detected
+problems — **never raw HTML** — and decides whether there's an actual reason to reach out right
+now, not just "the website has problems." Output is JSON-schema-constrained
+(`qualified`/`confidence`/`opportunity`/`whyNow`/`evidence[]`/`service`/`recommendedAction`), with
+an explicit system-prompt instruction to never invent facts beyond what was given. A lead the AI
+doesn't qualify gets archived (`ai_not_qualified`) instead of drafted, same as any other
+deterministic rejection — you can see exactly why on its lead page. This is a filter layered on
+top of the existing pipeline, not a dependency: a missing key, an API failure, a timeout, or an
+exhausted per-run budget (`AI_MAX_LEADS_PER_RUN`, default 10) all just skip the AI step and leave
+the deterministic queued/archived decision as the final answer.
+
+Outreach drafting itself is still the deterministic template engine — AI-personalized drafts,
+AI-based reply classification (still a keyword heuristic today), and follow-up intelligence are
+explicitly *not* built yet; see the commit history for the phased plan.
 
 ## Gmail reply sync (optional, read-only)
 
