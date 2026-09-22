@@ -37,14 +37,42 @@ npm run dev
 Open http://localhost:3000. The SQLite file and its tables are created automatically on first
 run — nothing else to set up.
 
-Click **Run pipeline now** on the Queue page to discover, audit, and score real companies. A
-run takes anywhere from ~10s to ~45s depending on how many candidates it audits. It's idempotent
-— re-running skips domains already in the database, same as the nightly-cron design in the plan.
+Click **Run Pipeline** in the sidebar to discover, audit, and score real companies. A run takes
+anywhere from ~10s to ~45s depending on how many candidates it audits. It's idempotent —
+re-running skips domains already in the database, same as the nightly-cron design in the plan.
 
-Every row in `clientpilot.db` comes from that button — there is no seed data or fake/demo
-content anywhere in this project. If the queue looks empty after a run, check the Leads page
-filtered to "Archived" to see why each candidate was rejected (no contact found, score too low,
-etc.) rather than queued.
+Every row in `clientpilot.db` comes from that button (or Automation, see below) — there is no
+seed data or fake/demo content anywhere in this project. If the queue looks empty after a run,
+check **Opportunities → Archived** to see why each candidate was rejected (no contact found,
+score too low, etc.) rather than queued.
+
+## Pages
+
+- **Overview** (`/`) — today/this-week stats, top-scoring queued leads, an Insights panel
+  computed from real queries, Recent Replies, and a pipeline funnel strip. Nothing on this page
+  is placeholder data; every number is a live query against `clientpilot.db`.
+- **Opportunities** (`/leads`) — the full lead list, filterable/searchable.
+- **Outreach** (`/outreach`) — every drafted message across every lead, filterable by
+  draft/sent/replied.
+- **Inbox** (`/inbox`) — every reply, with the captured Gmail snippet when sync found one (manual
+  marks have no text — the page says so rather than inventing a preview).
+- **Follow-ups** (`/followups`) — sent leads past the day-4/day-9 window with no reply.
+- **Pipeline** (`/pipeline`) — funnel view (discovered → qualified → contacted → replied →
+  interested → closed), mapped onto the real `leads`/`outreach` state machine, not a separately
+  tracked stage.
+- **Analytics** (`/analytics`) — reply rates by source/service, archive-reason breakdown.
+- **Settings** (`/settings`) — services, threshold, Groq/Gmail connection status, automation
+  interval.
+
+## Automation
+
+The sidebar's Automation toggle runs the pipeline on a set interval (default every 6 hours,
+configurable in Settings) **without you clicking Run Pipeline yourself.** Read the mechanism
+honestly: it's a client-side scheduler (`AutomationToggle` component) that fires while a browser
+tab has the dashboard open — there is no server-side cron in this local dev setup, so it cannot
+run while your laptop is closed or the tab isn't open. The Settings page says this explicitly.
+For true background automation, this would need deploying with a real scheduler (GitHub Actions,
+per the original plan doc) — not built yet.
 
 ### Optional env vars (`.env.local`, see `.env.example`)
 
@@ -80,18 +108,17 @@ explicitly *not* built yet; see the commit history for the phased plan.
 
 ## Gmail reply sync (optional, read-only)
 
-Once connected (Settings → Gmail reply sync), the **Check for replies** button on the Queue page
+Once connected (Settings → Gmail reply sync), the **Check for replies** button on the Inbox page
 searches your inbox for messages from contacts you've sent to, and — if found — marks the lead
-replied and classifies it with a small keyword heuristic (not an LLM call; deliberately
-deterministic, same as the rest of the pipeline). It never sends, drafts, or modifies anything in
-Gmail — read-only scope only. This still requires a manual click, same as "Run pipeline now"; there
-is no cron running in the background.
+replied, captures the message snippet, and classifies it with a small keyword heuristic (not an
+LLM call; deliberately deterministic, same as the rest of the pipeline). It never sends, drafts,
+or modifies anything in Gmail — read-only scope only. This still requires a manual click, same as
+Run Pipeline (or fires automatically if you've turned that on — see Automation above).
 
 Once a reply lands and the day-4/day-9 window opens with no response, the lead's page gets a
 **Generate follow-up draft** button — it drafts the next follow-up for you to review and send the
-same way as the initial email (never auto-sent). Both of these — replies and follow-ups due —
-surface together in the **Needs attention** section on the Queue page, so there's one place that
-says what to do next instead of you having to click into every lead.
+same way as the initial email (never auto-sent). Leads waiting on this collect on the Follow-ups
+page; replies collect on the Inbox page; both also surface in the Overview's Insights panel.
 
 ## Known V1 limitations (honest, not bugs)
 
