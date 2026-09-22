@@ -174,6 +174,241 @@ export function getLeadDetail(id: string) {
   };
 }
 
+function startOfDay(ts = Date.now()): number {
+  const d = new Date(ts);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+function startOfWeek(ts = Date.now()): number {
+  const d = new Date(ts);
+  const day = d.getDay(); // 0 = Sunday
+  d.setDate(d.getDate() - day);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+/** Real counts for the Overview stat row — no placeholders. */
+export function getOverviewStats() {
+  const todayStart = startOfDay();
+  const weekStart = startOfWeek();
+
+  const newToday = db
+    .select({ c: sql<number>`count(*)` })
+    .from(leads)
+    .where(sql`${leads.createdAt} >= ${todayStart}`)
+    .get();
+
+  const sentThisWeek = db
+    .select({ c: sql<number>`count(*)` })
+    .from(outreach)
+    .where(sql`${outreach.sentAt} is not null and ${outreach.sentAt} >= ${weekStart}`)
+    .get();
+
+  const repliesThisWeek = db
+    .select({ c: sql<number>`count(*)` })
+    .from(outreach)
+    .where(sql`${outreach.repliedAt} is not null and ${outreach.repliedAt} >= ${weekStart}`)
+    .get();
+
+  const interested = db
+    .select({ c: sql<number>`count(*)` })
+    .from(outreach)
+    .where(sql`${outreach.replyClass} in ('hot', 'interested')`)
+    .get();
+
+  return {
+    newOpportunitiesToday: Number(newToday?.c ?? 0),
+    outreachSentThisWeek: Number(sentThisWeek?.c ?? 0),
+    repliesThisWeek: Number(repliesThisWeek?.c ?? 0),
+    interestedLeads: Number(interested?.c ?? 0),
+  };
+}
+
+/**
+ * Funnel counts. Mapped onto the real state machine, not a separate stored
+ * stage: Discovered = every researched lead; Qualified = cleared every
+ * deterministic (+ AI, if enabled) gate, whether or not it's been sent yet;
+ * Contacted = sent or replied; Replied; Interested = replied hot/interested;
+ * Closed = replyClass no/not_now, or a followup_2 sent with no reply (the
+ * "two follow-ups max, then it closes" rule already used on the lead page).
+ */
+export function getPipelineFunnel() {
+  const discovered = db.select({ c: sql<number>`count(*)` }).from(leads).get();
+
+  const qualified = db
+    .select({ c: sql<number>`count(*)` })
+    .from(leads)
+    .where(sql`${leads.status} in ('queued', 'sent', 'replied')`)
+    .get();
+
+  const contacted = db
+    .select({ c: sql<number>`count(*)` })
+    .from(leads)
+    .where(sql`${leads.status} in ('sent', 'replied')`)
+    .get();
+
+  const replied = db.select({ c: sql<number>`count(*)` }).from(leads).where(eq(leads.status, "replied")).get();
+
+  const interested = db
+    .select({ c: sql<number>`count(distinct ${outreach.leadId})` })
+    .from(outreach)
+    .where(sql`${outreach.replyClass} in ('hot', 'interested')`)
+    .get();
+
+  const closedNegative = db
+    .select({ c: sql<number>`count(distinct ${outreach.leadId})` })
+    .from(outreach)
+    .where(sql`${outreach.replyClass} in ('no', 'not_now')`)
+    .get();
+  const closedNoReplyAfterFollowups = db
+    .select({ c: sql<number>`count(*)` })
+    .from(outreach)
+    .where(sql`${outreach.kind} = 'followup_2' and ${outreach.sentAt} is not null and ${outreach.repliedAt} is null`)
+    .get();
+
+  return {
+    discovered: Number(discovered?.c ?? 0),
+    qualified: Number(qualified?.c ?? 0),
+    contacted: Number(contacted?.c ?? 0),
+    replied: Number(replied?.c ?? 0),
+    interested: Number(interested?.c ?? 0),
+    closed: Number(closedNegative?.c ?? 0) + Number(closedNoReplyAfterFollowups?.c ?? 0),
+  };
+}
+
+export type OutreachListItem = { lead: LeadRow; outreach: OutreachRow };
+
+export function getOutreachList(filter?: { status?: "draft" | "sent" | "replied" }): OutreachListItem[] {
+  const rows = db.select().from(outreach).orderBy(desc(outreach.draftedAt)).all();
+  const leadIds = [...new Set(rows.map((o) => o.leadId))];
+  const leadRows = leadIds.length ? db.select().from(leads).where(inArray(leads.id, leadIds)).all() : [];
+  const leadById = new Map(leadRows.map((l) => [l.id, l]));
+
+  const items: OutreachListItem[] = [];
+  for (const o of rows) {
+    const lead = leadById.get(o.leadId);
+    if (!lead) continue;
+    const status = o.repliedAt ? "replied" : o.sentAt ? "sent" : "draft";
+    if (filter?.status && filter.status !== status) continue;
+    items.push({ lead, outreach: o });
+  }
+  return items;
+}
+
+export type InboxReplyItem = { lead: LeadRow; outreach: OutreachRow };
+
+/** Recent-enough-to-still-matter reply count, used for the sidebar badge —
+ * there's no read/unread tracking, so "recent" (7 days) stands in for it. */
+export function getRecentInboxCount(): number {
+  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const row = db
+    .select({ c: sql<number>`count(*)` })
+    .from(outreach)
+    .where(sql`${outreach.repliedAt} is not null and ${outreach.repliedAt} >= ${weekAgo}`)
+    .get();
+  return Number(row?.c ?? 0);
+}
+
+export function getInboxReplies(): InboxReplyItem[] {
+  const rows = db
+    .select()
+    .from(outreach)
+    .where(sql`${outreach.repliedAt} is not null`)
+    .orderBy(desc(outreach.repliedAt))
+    .all();
+  const leadIds = [...new Set(rows.map((o) => o.leadId))];
+  const leadRows = leadIds.length ? db.select().from(leads).where(inArray(leads.id, leadIds)).all() : [];
+  const leadById = new Map(leadRows.map((l) => [l.id, l]));
+  return rows.flatMap((o) => {
+    const lead = leadById.get(o.leadId);
+    return lead ? [{ lead, outreach: o }] : [];
+  });
+}
+
+export type FollowupItem = { lead: LeadRow; outreach: OutreachRow; dueSince: number };
+
+export function getFollowupsDueList(): FollowupItem[] {
+  const rows = db
+    .select()
+    .from(outreach)
+    .where(sql`${outreach.sentAt} is not null and ${outreach.repliedAt} is null`)
+    .all();
+  const leadIds = [...new Set(rows.map((o) => o.leadId))];
+  const leadRows = leadIds.length ? db.select().from(leads).where(inArray(leads.id, leadIds)).all() : [];
+  const leadById = new Map(leadRows.map((l) => [l.id, l]));
+
+  const now = Date.now();
+  const items: FollowupItem[] = [];
+  for (const o of rows) {
+    if (!o.sentAt) continue;
+    const days = Math.floor((now - o.sentAt) / (1000 * 60 * 60 * 24));
+    const due = (o.kind === "initial" && days >= 4) || (o.kind === "followup_1" && days >= 9);
+    if (!due) continue;
+    const lead = leadById.get(o.leadId);
+    if (!lead) continue;
+    items.push({ lead, outreach: o, dueSince: o.sentAt });
+  }
+  return items.sort((a, b) => a.dueSince - b.dueSince);
+}
+
+export function getLatestAiForLeads(leadIds: string[]): Map<string, AiAnalysisRow> {
+  if (leadIds.length === 0) return new Map();
+  const rows = db.select().from(aiAnalysis).where(inArray(aiAnalysis.leadId, leadIds)).all();
+  const map = new Map<string, AiAnalysisRow>();
+  for (const row of rows) {
+    const existing = map.get(row.leadId);
+    if (!existing || row.analyzedAt > existing.analyzedAt) map.set(row.leadId, row);
+  }
+  return map;
+}
+
+/**
+ * Real, computed insights — no invented claims. Each string is grounded in
+ * an actual query result; if there's nothing to say, nothing is returned.
+ */
+export function getInsights(): string[] {
+  const insights: string[] = [];
+  const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+
+  const newLeadsBySource = db
+    .select({ source: leads.source, c: sql<number>`count(*)` })
+    .from(leads)
+    .where(sql`${leads.createdAt} >= ${dayAgo}`)
+    .groupBy(leads.source)
+    .all();
+  const topSource = newLeadsBySource.sort((a, b) => Number(b.c) - Number(a.c))[0];
+  if (topSource && Number(topSource.c) > 0) {
+    insights.push(
+      `${topSource.c} new lead${Number(topSource.c) === 1 ? "" : "s"} found via ${
+        { job_board: "job boards", product_hunt: "Product Hunt", directory: "Show HN / directories", github: "GitHub" }[
+          topSource.source
+        ] ?? topSource.source
+      } in the last 24h.`
+    );
+  }
+
+  const staleCount = getFollowupsDueList().length;
+  if (staleCount > 0) {
+    insights.push(
+      `${staleCount} sent lead${staleCount === 1 ? "" : "s"} ${
+        staleCount === 1 ? "hasn't" : "haven't"
+      } replied and ${staleCount === 1 ? "is" : "are"} ready for a follow-up.`
+    );
+  }
+
+  const hotCount = db
+    .select({ c: sql<number>`count(*)` })
+    .from(outreach)
+    .where(sql`${outreach.replyClass} = 'hot' and ${outreach.repliedAt} is not null`)
+    .get();
+  if (Number(hotCount?.c ?? 0) > 0) {
+    insights.push(`${hotCount!.c} hot repl${Number(hotCount!.c) === 1 ? "y" : "ies"} waiting on you in the Inbox.`);
+  }
+
+  return insights;
+}
+
 export function getAnalytics() {
   const allLeads = db.select().from(leads).all();
   const allOutreach = db.select().from(outreach).all();

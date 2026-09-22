@@ -55,6 +55,7 @@ export const outreach = sqliteTable("outreach", {
   sentAt: integer("sent_at"),
   repliedAt: integer("replied_at"),
   replyClass: text("reply_class"), // hot | interested | maybe | not_now | no | auto
+  replySnippet: text("reply_snippet"), // captured from Gmail sync only; null for manual marks
 });
 
 export const aiAnalysis = sqliteTable("ai_analysis", {
@@ -85,4 +86,7 @@ export const settings = sqliteTable("settings", {
   senderName: text("sender_name").notNull().default("Hardik"),
   gmailRefreshToken: text("gmail_refresh_token"),
   gmailConnectedEmail: text("gmail_connected_email"),
+  automationEnabled: integer("automation_enabled", { mode: "boolean" }).notNull().default(false),
+  automationIntervalMinutes: integer("automation_interval_minutes").notNull().default(360),
+  lastAutoRunAt: integer("last_auto_run_at"),
 });

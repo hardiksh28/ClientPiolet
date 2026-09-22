@@ -67,7 +67,8 @@ CREATE TABLE IF NOT EXISTS outreach (
   drafted_at INTEGER NOT NULL,
   sent_at INTEGER,
   replied_at INTEGER,
-  reply_class TEXT
+  reply_class TEXT,
+  reply_snippet TEXT
 );
 
 CREATE TABLE IF NOT EXISTS ai_analysis (
@@ -93,7 +94,10 @@ CREATE TABLE IF NOT EXISTS settings (
   min_score INTEGER NOT NULL DEFAULT 70,
   daily_limit INTEGER NOT NULL DEFAULT 20,
   portfolio_url TEXT NOT NULL DEFAULT '',
-  sender_name TEXT NOT NULL DEFAULT 'Hardik'
+  sender_name TEXT NOT NULL DEFAULT 'Hardik',
+  automation_enabled INTEGER NOT NULL DEFAULT 0,
+  automation_interval_minutes INTEGER NOT NULL DEFAULT 360,
+  last_auto_run_at INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_leads_status_score ON leads(status, score DESC);
@@ -113,6 +117,20 @@ if (!settingsColumnNames.has("gmail_refresh_token")) {
 }
 if (!settingsColumnNames.has("gmail_connected_email")) {
   sqlite.exec("ALTER TABLE settings ADD COLUMN gmail_connected_email TEXT");
+}
+if (!settingsColumnNames.has("automation_enabled")) {
+  sqlite.exec("ALTER TABLE settings ADD COLUMN automation_enabled INTEGER NOT NULL DEFAULT 0");
+}
+if (!settingsColumnNames.has("automation_interval_minutes")) {
+  sqlite.exec("ALTER TABLE settings ADD COLUMN automation_interval_minutes INTEGER NOT NULL DEFAULT 360");
+}
+if (!settingsColumnNames.has("last_auto_run_at")) {
+  sqlite.exec("ALTER TABLE settings ADD COLUMN last_auto_run_at INTEGER");
+}
+
+const outreachColumns = sqlite.prepare("PRAGMA table_info(outreach)").all() as { name: string }[];
+if (!outreachColumns.some((c) => c.name === "reply_snippet")) {
+  sqlite.exec("ALTER TABLE outreach ADD COLUMN reply_snippet TEXT");
 }
 
 const settingsRow = sqlite

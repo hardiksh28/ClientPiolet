@@ -2,6 +2,7 @@ import { getSettings } from "@/lib/data";
 import { SettingsForm } from "@/components/settings-form";
 import { GmailConnect } from "@/components/gmail-connect";
 import { GroqStatus } from "@/components/groq-status";
+import { AutomationSettings } from "@/components/automation-settings";
 import { isGmailConfigured } from "@/lib/gmail/oauth";
 import { isGroqConfigured } from "@/lib/ai/groq";
 
@@ -29,6 +30,12 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
         connectedEmail={settings.gmailConnectedEmail}
         justConnected={justConnected}
         error={error}
+      />
+
+      <AutomationSettings
+        enabled={settings.automationEnabled}
+        intervalMinutes={settings.automationIntervalMinutes}
+        lastAutoRunAt={settings.lastAutoRunAt}
       />
 
       <SettingsForm

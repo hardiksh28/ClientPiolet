@@ -15,7 +15,30 @@ export async function runPipelineAction(): Promise<PipelineRunSummary> {
   revalidatePath("/");
   revalidatePath("/leads");
   revalidatePath("/analytics");
+  revalidatePath("/pipeline");
   return summary;
+}
+
+/** Same as runPipelineAction, but also stamps lastAutoRunAt — called by the
+ * client-side automation scheduler, never by a real background cron (there
+ * isn't one in this local dev setup). */
+export async function autoRunPipelineAction(): Promise<PipelineRunSummary> {
+  const summary = await runPipeline();
+  db.update(settingsTable).set({ lastAutoRunAt: Date.now() }).where(eq(settingsTable.id, 1)).run();
+  revalidatePath("/");
+  revalidatePath("/leads");
+  revalidatePath("/analytics");
+  revalidatePath("/pipeline");
+  return summary;
+}
+
+export async function setAutomationAction(enabled: boolean, intervalMinutes: number) {
+  db.update(settingsTable)
+    .set({ automationEnabled: enabled, automationIntervalMinutes: intervalMinutes })
+    .where(eq(settingsTable.id, 1))
+    .run();
+  revalidatePath("/");
+  revalidatePath("/settings");
 }
 
 export async function markSentAction(leadId: string, outreachId: string) {

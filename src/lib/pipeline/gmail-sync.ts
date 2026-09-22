@@ -60,7 +60,7 @@ export async function syncGmailReplies(): Promise<GmailSyncResult> {
       if (!reply) continue;
       const replyClass = classifyReplySnippet(reply.snippet);
       db.update(outreach)
-        .set({ repliedAt: reply.receivedAt, replyClass })
+        .set({ repliedAt: reply.receivedAt, replyClass, replySnippet: reply.snippet })
         .where(eq(outreach.id, row.outreachId))
         .run();
       db.update(leads)

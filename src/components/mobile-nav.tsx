@@ -2,18 +2,20 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Inbox, LayoutGrid, Radar, Settings } from "lucide-react";
+import { LayoutGrid, Mail, Radar, RefreshCw, Settings, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { href: "/", label: "Queue", icon: LayoutGrid },
-  { href: "/leads", label: "Leads", icon: Inbox },
-  { href: "/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/", label: "Overview", icon: LayoutGrid, badge: null as "inbox" | "followups" | null },
+  { href: "/leads", label: "Opportunities", icon: Target, badge: null },
+  { href: "/inbox", label: "Inbox", icon: Mail, badge: "inbox" as const },
+  { href: "/followups", label: "Follow-ups", icon: RefreshCw, badge: "followups" as const },
+  { href: "/settings", label: "Settings", icon: Settings, badge: null },
 ];
 
-export function MobileNav() {
+export function MobileNav({ inboxCount, followupsCount }: { inboxCount: number; followupsCount: number }) {
   const pathname = usePathname();
+  const badgeValue = { inbox: inboxCount, followups: followupsCount };
 
   return (
     <>
@@ -30,16 +32,22 @@ export function MobileNav() {
           {NAV.map((item) => {
             const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
             const Icon = item.icon;
+            const count = item.badge ? badgeValue[item.badge] : 0;
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex flex-col items-center gap-0.5 py-2.5 px-4 text-[10.5px] font-semibold rounded-full my-1.5 transition-colors",
+                  "relative flex flex-col items-center gap-0.5 py-2.5 px-3.5 text-[10px] font-semibold rounded-full my-1.5 transition-colors",
                   active ? "text-foreground" : "text-muted-2"
                 )}
               >
-                <Icon size={18} strokeWidth={2.3} />
+                <span className="relative">
+                  <Icon size={18} strokeWidth={2.3} />
+                  {count > 0 && (
+                    <span className="absolute -top-1 -right-1.5 h-1.5 w-1.5 rounded-full bg-pink" />
+                  )}
+                </span>
                 {item.label}
               </Link>
             );

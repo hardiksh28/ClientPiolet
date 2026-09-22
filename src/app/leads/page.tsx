@@ -22,7 +22,7 @@ export default async function LeadsPage({
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-[32px] font-extrabold tracking-tight">Leads</h1>
+        <h1 className="text-[32px] font-extrabold tracking-tight">Opportunities</h1>
         <p className="mt-1 text-[13.5px] text-muted">{leads.length} matching this filter.</p>
       </div>
 
