@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db, sqlite } from "@/lib/db/client";
-import { audits, contacts, leads, outreach, settings as settingsTable } from "@/lib/db/schema";
+import { aiAnalysis, audits, contacts, leads, outreach, settings as settingsTable } from "@/lib/db/schema";
+import { analyzeOpportunity, opportunityInputHash } from "@/lib/ai/opportunity";
+import { GROQ_MODEL_HEAVY, isGroqConfigured } from "@/lib/ai/groq";
 import { auditSite } from "./audit";
 import { findContact } from "./contact";
 import { discoverDirectories, discoverGithub, discoverJobBoards, discoverProductHunt } from "./discover";
@@ -9,6 +11,10 @@ import { draftEmail } from "./draft";
 import { resolveLeads } from "./resolve";
 import { scoreLead } from "./score";
 import type { AuditResult, ContactResult, PipelineRunSummary, RawLead, Source } from "./types";
+
+// Budget cap: at most this many Groq calls per manual pipeline run, tunable
+// without a code change since free-tier limits vary by account.
+const MAX_AI_LEADS_PER_RUN = Number(process.env.AI_MAX_LEADS_PER_RUN ?? 10);
 
 async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results: R[] = new Array(items.length);
@@ -73,6 +79,9 @@ export async function runPipeline(): Promise<PipelineRunSummary> {
   let queuedCount = 0;
   let archivedCount = 0;
   let auditedCount = 0;
+  let aiAnalyzedCount = 0;
+  let aiRejectedCount = 0;
+  const groqEnabled = isGroqConfigured();
 
   await mapLimit(batch, 6, async (lead) => {
     try {
@@ -158,14 +167,42 @@ export async function runPipeline(): Promise<PipelineRunSummary> {
       const noContact = !contact;
       const belowThreshold = score.total < minScore;
       const limitReached = !noContact && !belowThreshold && queuedCount >= dailyLimit;
-      const status = noContact || belowThreshold || limitReached ? "archived" : "queued";
-      const archiveReason = noContact
+
+      let status: "queued" | "archived" = noContact || belowThreshold || limitReached ? "archived" : "queued";
+      let archiveReason: string | null = noContact
         ? "no_contact"
         : belowThreshold
         ? "low_score"
         : limitReached
         ? "daily_limit_reached"
         : null;
+
+      // AI opportunity gate: only for leads that already cleared every
+      // deterministic bar. A missing key, exhausted budget, or any API
+      // failure just skips this — the deterministic decision above stands.
+      let aiResult: Awaited<ReturnType<typeof analyzeOpportunity>> = null;
+      let aiInputHash: string | null = null;
+      if (status === "queued" && groqEnabled && aiAnalyzedCount < MAX_AI_LEADS_PER_RUN) {
+        aiAnalyzedCount++;
+        const aiInput = {
+          company: lead.company,
+          domain: lead.domain,
+          source: lead.source,
+          sourceMeta: lead.sourceMeta,
+          websiteTitle: audit.title,
+          h1: audit.h1,
+          metaDescription: audit.metaDesc,
+          problems: audit.problems,
+          enabledServices,
+        };
+        aiInputHash = opportunityInputHash(aiInput);
+        aiResult = await analyzeOpportunity(aiInput);
+        if (aiResult && !aiResult.qualified) {
+          status = "archived";
+          archiveReason = "ai_not_qualified";
+          aiRejectedCount++;
+        }
+      }
 
       db.insert(leads)
         .values({
@@ -213,6 +250,26 @@ export async function runPipeline(): Promise<PipelineRunSummary> {
           .run();
       }
 
+      if (aiResult && aiInputHash) {
+        db.insert(aiAnalysis)
+          .values({
+            id: randomUUID(),
+            leadId,
+            qualified: aiResult.qualified,
+            confidence: aiResult.confidence,
+            opportunity: aiResult.opportunity,
+            whyNow: aiResult.whyNow,
+            evidence: JSON.stringify(aiResult.evidence),
+            service: aiResult.service,
+            recommendedAction: aiResult.recommendedAction,
+            summary: aiResult.summary,
+            model: GROQ_MODEL_HEAVY,
+            inputHash: aiInputHash,
+            analyzedAt: now,
+          })
+          .run();
+      }
+
       if (status === "queued") {
         const draft = draftEmail(lead, audit, contact, { senderName, portfolioUrl });
         db.insert(outreach)
@@ -246,6 +303,8 @@ export async function runPipeline(): Promise<PipelineRunSummary> {
     archived: archivedCount,
     errors,
     durationMs: Date.now() - startedAt,
+    aiAnalyzed: aiAnalyzedCount,
+    aiRejected: aiRejectedCount,
   };
 }
 

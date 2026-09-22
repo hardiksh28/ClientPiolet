@@ -42,8 +42,15 @@ export function RunPipelineButton() {
           <span className="font-semibold text-foreground">
             {summary.discovered} discovered
           </span>{" "}
-          → {summary.candidatesAfterDedupe} new domains → {summary.audited} audited →{" "}
-          <span className="font-semibold text-green">{summary.queued} queued</span>,{" "}
+          → {summary.candidatesAfterDedupe} new domains → {summary.audited} audited
+          {summary.aiAnalyzed > 0 && (
+            <>
+              {" "}
+              → <span className="text-blue font-semibold">{summary.aiAnalyzed} AI-reviewed</span>
+              {summary.aiRejected > 0 && <> ({summary.aiRejected} not qualified)</>}
+            </>
+          )}{" "}
+          → <span className="font-semibold text-green">{summary.queued} queued</span>,{" "}
           {summary.archived} archived{" "}
           <span className="text-muted-2">({(summary.durationMs / 1000).toFixed(1)}s)</span>
           {summary.candidatesAfterDedupe === 0 && (

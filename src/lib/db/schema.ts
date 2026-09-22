@@ -57,6 +57,24 @@ export const outreach = sqliteTable("outreach", {
   replyClass: text("reply_class"), // hot | interested | maybe | not_now | no | auto
 });
 
+export const aiAnalysis = sqliteTable("ai_analysis", {
+  id: text("id").primaryKey(),
+  leadId: text("lead_id")
+    .notNull()
+    .references(() => leads.id, { onDelete: "cascade" }),
+  qualified: integer("qualified", { mode: "boolean" }).notNull(),
+  confidence: text("confidence").notNull(), // high | medium | low
+  opportunity: text("opportunity").notNull(),
+  whyNow: text("why_now").notNull(),
+  evidence: text("evidence").notNull().default("[]"), // JSON string[]
+  service: text("service").notNull(),
+  recommendedAction: text("recommended_action").notNull(),
+  summary: text("summary").notNull(),
+  model: text("model").notNull(),
+  inputHash: text("input_hash").notNull(), // for cache-skip on re-runs with unchanged evidence
+  analyzedAt: integer("analyzed_at").notNull(),
+});
+
 export const settings = sqliteTable("settings", {
   id: integer("id").primaryKey({ autoIncrement: false }).default(1),
   services: text("services").notNull().default("[]"), // JSON string[]

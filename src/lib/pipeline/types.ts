@@ -61,4 +61,6 @@ export type PipelineRunSummary = {
   archived: number;
   errors: string[];
   durationMs: number;
+  aiAnalyzed: number;
+  aiRejected: number;
 };

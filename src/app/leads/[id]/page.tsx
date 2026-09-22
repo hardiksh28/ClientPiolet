@@ -4,6 +4,7 @@ import { ArrowLeft, ExternalLink, Globe, User } from "lucide-react";
 import { getLeadDetail } from "@/lib/data";
 import { ScoreBadge, SourceBadge, StatusPill, ProblemTag } from "@/components/badges";
 import { OutreachPanel } from "@/components/outreach-panel";
+import { AiOpportunityCard } from "@/components/ai-opportunity-card";
 import { timeAgo, SOURCE_LABEL } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,7 @@ export default async function LeadDetailPage({ params }: PageProps<"/leads/[id]"
   const { id } = await params;
   const detail = getLeadDetail(id);
   if (!detail) notFound();
-  const { lead, audit, contact, outreach } = detail;
+  const { lead, audit, contact, outreach, ai } = detail;
   const problems: { tag: string; weight: number; evidence: string }[] = audit
     ? JSON.parse(audit.problems)
     : [];
@@ -62,6 +63,8 @@ export default async function LeadDetailPage({ params }: PageProps<"/leads/[id]"
           <span className="font-semibold text-foreground">{lead.archiveReason.replaceAll("_", " ")}</span>
         </div>
       )}
+
+      {ai && <AiOpportunityCard ai={ai} />}
 
       <div className="grid lg:grid-cols-5 gap-5">
         <div className="lg:col-span-2 space-y-4">

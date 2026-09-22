@@ -70,6 +70,22 @@ CREATE TABLE IF NOT EXISTS outreach (
   reply_class TEXT
 );
 
+CREATE TABLE IF NOT EXISTS ai_analysis (
+  id TEXT PRIMARY KEY,
+  lead_id TEXT NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+  qualified INTEGER NOT NULL,
+  confidence TEXT NOT NULL,
+  opportunity TEXT NOT NULL,
+  why_now TEXT NOT NULL,
+  evidence TEXT NOT NULL DEFAULT '[]',
+  service TEXT NOT NULL,
+  recommended_action TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  model TEXT NOT NULL,
+  input_hash TEXT NOT NULL,
+  analyzed_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   id INTEGER PRIMARY KEY DEFAULT 1,
   services TEXT NOT NULL DEFAULT '[]',
@@ -83,6 +99,7 @@ CREATE TABLE IF NOT EXISTS settings (
 CREATE INDEX IF NOT EXISTS idx_leads_status_score ON leads(status, score DESC);
 CREATE INDEX IF NOT EXISTS idx_leads_domain ON leads(domain);
 CREATE INDEX IF NOT EXISTS idx_outreach_lead ON outreach(lead_id);
+CREATE INDEX IF NOT EXISTS idx_ai_analysis_lead ON ai_analysis(lead_id);
 `);
 
 // Lightweight migrations: add columns that didn't exist in earlier versions

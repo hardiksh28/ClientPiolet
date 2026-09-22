@@ -1,7 +1,9 @@
 import { getSettings } from "@/lib/data";
 import { SettingsForm } from "@/components/settings-form";
 import { GmailConnect } from "@/components/gmail-connect";
+import { GroqStatus } from "@/components/groq-status";
 import { isGmailConfigured } from "@/lib/gmail/oauth";
+import { isGroqConfigured } from "@/lib/ai/groq";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +21,8 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
           Services, threshold, and the details that go on every draft.
         </p>
       </div>
+
+      <GroqStatus configured={isGroqConfigured()} />
 
       <GmailConnect
         configured={isGmailConfigured()}

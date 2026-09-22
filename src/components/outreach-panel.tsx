@@ -48,6 +48,8 @@ export function OutreachPanel({
         {lead.archiveReason === "fetch_failed" && "Couldn't fetch this site — archived."}
         {lead.archiveReason === "daily_limit_reached" &&
           "This one cleared the bar, but your daily discovery limit was already hit for this run — raise it in Settings and re-run to pick it up."}
+        {lead.archiveReason === "ai_not_qualified" &&
+          "Passed every deterministic check, but the AI opportunity read below found no real reason to reach out right now — archived without drafting."}
         {!lead.archiveReason && "No draft has been generated for this lead yet."}
       </div>
     );

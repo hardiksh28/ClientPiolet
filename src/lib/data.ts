@@ -1,12 +1,13 @@
 import { desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { audits, contacts, leads, outreach, settings as settingsTable } from "@/lib/db/schema";
+import { aiAnalysis, audits, contacts, leads, outreach, settings as settingsTable } from "@/lib/db/schema";
 
 export type LeadRow = typeof leads.$inferSelect;
 export type AuditRow = typeof audits.$inferSelect;
 export type ContactRow = typeof contacts.$inferSelect;
 export type OutreachRow = typeof outreach.$inferSelect;
 export type SettingsRow = typeof settingsTable.$inferSelect;
+export type AiAnalysisRow = typeof aiAnalysis.$inferSelect;
 
 export function getSettings(): SettingsRow {
   const row = db.select().from(settingsTable).where(eq(settingsTable.id, 1)).get();
@@ -158,7 +159,19 @@ export function getLeadDetail(id: string) {
     .where(eq(outreach.leadId, id))
     .orderBy(desc(outreach.draftedAt))
     .get();
-  return { lead, audit: audit ?? null, contact: contact ?? null, outreach: outreachRow ?? null };
+  const ai = db
+    .select()
+    .from(aiAnalysis)
+    .where(eq(aiAnalysis.leadId, id))
+    .orderBy(desc(aiAnalysis.analyzedAt))
+    .get();
+  return {
+    lead,
+    audit: audit ?? null,
+    contact: contact ?? null,
+    outreach: outreachRow ?? null,
+    ai: ai ?? null,
+  };
 }
 
 export function getAnalytics() {
