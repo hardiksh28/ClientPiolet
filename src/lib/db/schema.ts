@@ -11,6 +11,7 @@ export const leads = sqliteTable("leads", {
   status: text("status").notNull().default("queued"), // queued | sent | replied | archived
   archiveReason: text("archive_reason"), // low_score | no_problems | no_contact | dismissed | fetch_failed
   score: integer("score").notNull().default(0),
+  scoreBreakdown: text("score_breakdown").notNull().default("{}"), // JSON ScoreBreakdown
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
 });

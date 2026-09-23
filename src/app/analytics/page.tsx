@@ -5,6 +5,10 @@ import { SOURCE_LABEL } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
+function formatInr(n: number): string {
+  return `₹${n.toLocaleString("en-IN")}`;
+}
+
 function BarRow({
   label,
   value,
@@ -91,7 +95,9 @@ export default async function AnalyticsPage() {
                 label={SOURCE_LABEL[source] ?? source}
                 value={v.total}
                 max={maxSourceTotal}
-                sub={`sent ${v.sent} · replied ${v.replied}`}
+                sub={`sent ${v.sent} · replied ${v.replied}${
+                  v.deals > 0 ? ` · ${v.deals} deal${v.deals === 1 ? "" : "s"} · ${formatInr(v.revenue)}` : ""
+                }`}
                 color={
                   { job_board: "var(--green)", product_hunt: "var(--pink)", directory: "var(--blue)", github: "var(--yellow)" }[
                     source

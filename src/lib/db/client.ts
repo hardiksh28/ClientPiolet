@@ -164,6 +164,11 @@ if (!outreachColumns.some((c) => c.name === "reply_snippet")) {
   sqlite.exec("ALTER TABLE outreach ADD COLUMN reply_snippet TEXT");
 }
 
+const leadsColumns = sqlite.prepare("PRAGMA table_info(leads)").all() as { name: string }[];
+if (!leadsColumns.some((c) => c.name === "score_breakdown")) {
+  sqlite.exec("ALTER TABLE leads ADD COLUMN score_breakdown TEXT NOT NULL DEFAULT '{}'");
+}
+
 const aiAnalysisColumns = sqlite.prepare("PRAGMA table_info(ai_analysis)").all() as { name: string }[];
 const aiAnalysisColumnNames = new Set(aiAnalysisColumns.map((c) => c.name));
 if (!aiAnalysisColumnNames.has("complexity")) {

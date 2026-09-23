@@ -6,6 +6,7 @@ import { ScoreBadge, SourceBadge, StatusPill, ProblemTag } from "@/components/ba
 import { OutreachPanel } from "@/components/outreach-panel";
 import { AiOpportunityCard } from "@/components/ai-opportunity-card";
 import { BuyingSignals } from "@/components/buying-signals";
+import { ScoreBreakdown } from "@/components/score-breakdown";
 import { PricingCard } from "@/components/pricing-card";
 import { computeSignals } from "@/lib/pipeline/signals";
 import type { Source } from "@/lib/pipeline/types";
@@ -86,6 +87,7 @@ export default async function LeadDetailPage({ params }: PageProps<"/leads/[id]"
       <div className="grid lg:grid-cols-5 gap-5">
         <div className="lg:col-span-2 space-y-4">
           <BuyingSignals signals={signals} />
+          <ScoreBreakdown raw={lead.scoreBreakdown} />
 
           <div className="rounded-[20px] bg-surface p-4">
             <div className="text-[12px] font-bold text-muted-2 uppercase tracking-wide mb-2.5">

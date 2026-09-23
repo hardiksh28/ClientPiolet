@@ -287,6 +287,7 @@ export async function runPipeline(): Promise<PipelineRunSummary> {
           status,
           archiveReason,
           score: score.total,
+          scoreBreakdown: JSON.stringify(score),
           createdAt: now,
           updatedAt: now,
         })
@@ -475,7 +476,13 @@ export async function reconsiderArchivedLeads(): Promise<{ requeued: number; ree
 
     if (contact && score.total >= minScore && alreadyQueued + requeued < dailyLimit) {
       db.update(leads)
-        .set({ status: "queued", archiveReason: null, score: score.total, updatedAt: now })
+        .set({
+          status: "queued",
+          archiveReason: null,
+          score: score.total,
+          scoreBreakdown: JSON.stringify(score),
+          updatedAt: now,
+        })
         .where(eq(leads.id, lead.id))
         .run();
 
@@ -532,7 +539,10 @@ export async function reconsiderArchivedLeads(): Promise<{ requeued: number; ree
       requeued++;
     } else {
       // Keep the displayed score honest even when it doesn't clear the bar.
-      db.update(leads).set({ score: score.total, updatedAt: now }).where(eq(leads.id, lead.id)).run();
+      db.update(leads)
+        .set({ score: score.total, scoreBreakdown: JSON.stringify(score), updatedAt: now })
+        .where(eq(leads.id, lead.id))
+        .run();
     }
   }
 

@@ -482,33 +482,81 @@ export function getDealsList(): DealListItem[] {
   });
 }
 
-/** Average won price per service — only returned once there's at least one
- * won deal for that service. No zero-based or extrapolated averages. */
-export function getHistoricalAveragesByService(): { service: string; avg: number; count: number }[] {
-  const won = db.select().from(deals).where(sql`${deals.status} != 'estimated' and ${deals.wonAt} is not null`).all();
-  const bySvc = new Map<string, number[]>();
-  for (const d of won) {
-    const arr = bySvc.get(d.service) ?? [];
-    arr.push(d.currentPrice);
-    bySvc.set(d.service, arr);
+const WON_STATUSES = ["won", "invoiced", "partially_paid", "paid"];
+
+/** Per-service performance connecting the pricing engine's original
+ * recommendation to what actually happened: average won price (only once
+ * there's at least one won deal — no zero-based or extrapolated averages),
+ * average originally-recommended price across every deal ever quoted for
+ * that service, and a win rate computed only from deals that reached a
+ * terminal outcome (won or lost) — still-open deals don't count either way. */
+export function getHistoricalAveragesByService(): {
+  service: string;
+  avg: number;
+  count: number;
+  avgQuoted: number;
+  quotedCount: number;
+  winRate: number | null;
+  wonCount: number;
+  lostCount: number;
+}[] {
+  const allDeals = db.select().from(deals).all();
+
+  const quotedBySvc = new Map<string, number[]>();
+  const wonBySvc = new Map<string, number[]>();
+  const lostBySvc = new Map<string, number>();
+
+  for (const d of allDeals) {
+    const quoted = quotedBySvc.get(d.service) ?? [];
+    quoted.push(d.recommendedPrice);
+    quotedBySvc.set(d.service, quoted);
+
+    if (WON_STATUSES.includes(d.status)) {
+      const won = wonBySvc.get(d.service) ?? [];
+      won.push(d.currentPrice);
+      wonBySvc.set(d.service, won);
+    } else if (d.status === "lost") {
+      lostBySvc.set(d.service, (lostBySvc.get(d.service) ?? 0) + 1);
+    }
   }
-  return [...bySvc.entries()].map(([service, prices]) => ({
-    service,
-    avg: Math.round(prices.reduce((a, b) => a + b, 0) / prices.length),
-    count: prices.length,
-  }));
+
+  return [...quotedBySvc.entries()].map(([service, quotedPrices]) => {
+    const won = wonBySvc.get(service) ?? [];
+    const lostCount = lostBySvc.get(service) ?? 0;
+    const wonCount = won.length;
+    return {
+      service,
+      avg: wonCount > 0 ? Math.round(won.reduce((a, b) => a + b, 0) / wonCount) : 0,
+      count: wonCount,
+      avgQuoted: Math.round(quotedPrices.reduce((a, b) => a + b, 0) / quotedPrices.length),
+      quotedCount: quotedPrices.length,
+      winRate: wonCount + lostCount > 0 ? Math.round((wonCount / (wonCount + lostCount)) * 100) : null,
+      wonCount,
+      lostCount,
+    };
+  });
 }
 
 export function getAnalytics() {
   const allLeads = db.select().from(leads).all();
   const allOutreach = db.select().from(outreach).all();
+  const allDeals = db.select().from(deals).all();
 
-  const bySource: Record<string, { total: number; sent: number; replied: number }> = {};
+  const bySource: Record<string, { total: number; sent: number; replied: number; deals: number; revenue: number }> = {};
   for (const lead of allLeads) {
-    bySource[lead.source] ??= { total: 0, sent: 0, replied: 0 };
+    bySource[lead.source] ??= { total: 0, sent: 0, replied: 0, deals: 0, revenue: 0 };
     bySource[lead.source].total++;
     if (lead.status === "sent") bySource[lead.source].sent++;
     if (lead.status === "replied") bySource[lead.source].replied++;
+  }
+
+  const leadById = new Map(allLeads.map((l) => [l.id, l]));
+  for (const deal of allDeals) {
+    const lead = leadById.get(deal.leadId);
+    if (!lead) continue;
+    bySource[lead.source] ??= { total: 0, sent: 0, replied: 0, deals: 0, revenue: 0 };
+    bySource[lead.source].deals++;
+    bySource[lead.source].revenue += deal.amountPaid;
   }
 
   const byService: Record<string, { sent: number; replied: number }> = {};

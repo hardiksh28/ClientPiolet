@@ -135,20 +135,27 @@ export default async function EarningsPage() {
             <h2 className="text-[13px] font-bold mb-3">Your historical rates</h2>
             {averages.length === 0 ? (
               <p className="text-[12.5px] text-muted">
-                Not enough data yet — once you&apos;ve won a deal, its average shows up here
-                instead of the generic base rate.
+                Not enough data yet — once you&apos;ve quoted a deal, its numbers show up here.
               </p>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {averages.map((a) => (
-                  <div key={a.service} className="flex items-center justify-between">
-                    <div>
+                  <div key={a.service} className="space-y-1">
+                    <div className="flex items-center justify-between">
                       <div className="text-[12.5px] font-semibold">{a.service}</div>
-                      <div className="text-[11px] text-muted-2">
-                        {a.count} deal{a.count === 1 ? "" : "s"} won
-                      </div>
+                      {a.wonCount > 0 ? (
+                        <span className="font-bold text-[14px]">{formatInr(a.avg)}</span>
+                      ) : (
+                        <span className="text-[11px] text-muted-2">no wins yet</span>
+                      )}
                     </div>
-                    <span className="font-bold text-[14px]">{formatInr(a.avg)}</span>
+                    <div className="text-[11px] text-muted-2">
+                      Quoted avg {formatInr(a.avgQuoted)} across {a.quotedCount} deal
+                      {a.quotedCount === 1 ? "" : "s"}
+                      {a.wonCount > 0 && ` · ${a.wonCount} won`}
+                      {a.lostCount > 0 && ` · ${a.lostCount} lost`}
+                      {a.winRate !== null && ` · ${a.winRate}% win rate`}
+                    </div>
                   </div>
                 ))}
               </div>
