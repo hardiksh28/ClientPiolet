@@ -2,16 +2,21 @@ import Link from "next/link";
 import {
   ArrowRight,
   ArrowUpRight,
+  Flame,
   Lightbulb,
   MessageCircle,
   MessagesSquare,
   Send,
   Sparkles,
+  Target as TargetIcon,
   TrendingUp,
   Users,
+  Wallet,
   Zap,
 } from "lucide-react";
 import {
+  getDealsList,
+  getEarningsSummary,
   getInsights,
   getLatestAiForLeads,
   getLatestOutreachForLeads,
@@ -33,6 +38,10 @@ const SOURCE_AVATAR: Record<string, string> = {
   directory: "bg-blue text-blue-on",
   github: "bg-yellow text-yellow-on",
 };
+
+function formatInr(n: number): string {
+  return `₹${n.toLocaleString("en-IN")}`;
+}
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -61,6 +70,14 @@ export default async function HomePage() {
 
   const outreachByLead = getLatestOutreachForLeads(queuedLeads.map((l) => l.id));
   const aiByLead = getLatestAiForLeads(queuedLeads.map((l) => l.id));
+
+  const earnings = getEarningsSummary();
+  const largestOpportunity = Math.max(
+    0,
+    ...getDealsList()
+      .filter((d) => ["estimated", "proposed", "negotiating"].includes(d.deal.status))
+      .map((d) => d.deal.currentPrice)
+  );
 
   return (
     <div className="space-y-8">
@@ -100,6 +117,19 @@ export default async function HomePage() {
           hint="In pipeline"
         />
       </div>
+
+      <Link href="/earnings" className="block">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard label="Earned this month" value={formatInr(earnings.earnedThisMonth)} icon={Wallet} tone="success" />
+          <StatCard label="Active pipeline" value={formatInr(earnings.pipelineValue)} icon={TrendingUp} />
+          <StatCard label="Monthly target" value={formatInr(settings.monthlyTarget)} icon={TargetIcon} />
+          <StatCard
+            label="Largest opportunity"
+            value={largestOpportunity > 0 ? formatInr(largestOpportunity) : "—"}
+            icon={Flame}
+          />
+        </div>
+      </Link>
 
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">

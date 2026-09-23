@@ -13,6 +13,7 @@ import {
   Settings,
   ShieldCheck,
   Target,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SidebarRunPipeline } from "./sidebar-run-pipeline";
@@ -25,6 +26,7 @@ const NAV = [
   { href: "/inbox", label: "Inbox", icon: Mail, badge: "inbox" as const },
   { href: "/followups", label: "Follow-ups", icon: RefreshCw, badge: "followups" as const },
   { href: "/pipeline", label: "Pipeline", icon: GitBranch, badge: null },
+  { href: "/earnings", label: "Earnings", icon: Wallet, badge: null },
   { href: "/analytics", label: "Analytics", icon: BarChart3, badge: null },
 ];
 

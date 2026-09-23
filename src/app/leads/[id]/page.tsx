@@ -5,6 +5,7 @@ import { getLeadDetail } from "@/lib/data";
 import { ScoreBadge, SourceBadge, StatusPill, ProblemTag } from "@/components/badges";
 import { OutreachPanel } from "@/components/outreach-panel";
 import { AiOpportunityCard } from "@/components/ai-opportunity-card";
+import { PricingCard } from "@/components/pricing-card";
 import { timeAgo, SOURCE_LABEL } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +14,7 @@ export default async function LeadDetailPage({ params }: PageProps<"/leads/[id]"
   const { id } = await params;
   const detail = getLeadDetail(id);
   if (!detail) notFound();
-  const { lead, audit, contact, outreach, ai } = detail;
+  const { lead, audit, contact, outreach, ai, deal } = detail;
   const problems: { tag: string; weight: number; evidence: string }[] = audit
     ? JSON.parse(audit.problems)
     : [];
@@ -164,7 +165,8 @@ export default async function LeadDetailPage({ params }: PageProps<"/leads/[id]"
           </div>
         </div>
 
-        <div className="lg:col-span-3">
+        <div className="lg:col-span-3 space-y-4">
+          {deal && <PricingCard deal={deal} />}
           <OutreachPanel lead={lead} outreach={outreach} contact={contact} />
         </div>
       </div>

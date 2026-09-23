@@ -1,5 +1,6 @@
 import { TAG_TO_SERVICE } from "./score";
 import type { AuditResult, ContactResult, Problem, RawLead } from "./types";
+import type { PricingStrategy } from "@/lib/pricing/types";
 
 function pickTopProblem(problems: Problem[]): Problem {
   return [...problems].sort((a, b) => b.weight - a.weight)[0];
@@ -62,6 +63,17 @@ function implicationLine(topProblem: Problem): string {
   return implications[topProblem.tag] ?? "Small thing, but might be worth a look.";
 }
 
+// Never invent a number here — this only formats a price the deterministic
+// pricing calculator already produced. See src/lib/pricing/calculator.ts.
+function priceLine(strategy: PricingStrategy, price: number): string | null {
+  if (strategy === "no_price" || !price) return null;
+  const formatted = `₹${price.toLocaleString("en-IN")}`;
+  if (strategy === "mention_price") {
+    return `For the scope above, I'd estimate this at ${formatted}.`;
+  }
+  return `Projects like this usually start around ${formatted}, depending on the final scope.`;
+}
+
 export type Draft = {
   subject: string;
   body: string;
@@ -72,13 +84,21 @@ export function draftEmail(
   lead: RawLead,
   audit: AuditResult,
   contact: ContactResult,
-  opts: { senderName: string; portfolioUrl: string }
+  opts: {
+    senderName: string;
+    portfolioUrl: string;
+    /** Defaults to the top detected problem's mapped service if omitted. */
+    service?: string;
+    pricing?: { strategy: PricingStrategy; price: number };
+  }
 ): Draft {
   const top = pickTopProblem(audit.problems);
-  const service = TAG_TO_SERVICE[top.tag] ?? "Landing Page Redesign";
+  const service = opts.service ?? TAG_TO_SERVICE[top.tag] ?? "Landing Page Redesign";
   const firstName = contact?.name?.split(" ")[0] || "there";
 
   const subject = `quick note on ${lead.company.toLowerCase()}'s homepage`.slice(0, 45);
+
+  const price = opts.pricing ? priceLine(opts.pricing.strategy, opts.pricing.price) : null;
 
   const lines = [
     `Hi ${firstName},`,
@@ -90,6 +110,8 @@ export function draftEmail(
     implicationLine(top),
     "",
     offerLine(service),
+    price ? "" : undefined,
+    price ?? undefined,
     "",
     `- ${opts.senderName}`,
     opts.portfolioUrl || undefined,

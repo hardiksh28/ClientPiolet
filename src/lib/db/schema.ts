@@ -71,9 +71,38 @@ export const aiAnalysis = sqliteTable("ai_analysis", {
   service: text("service").notNull(),
   recommendedAction: text("recommended_action").notNull(),
   summary: text("summary").notNull(),
+  complexity: text("complexity"), // low | medium | high — AI's scope read, feeds the pricing engine
+  estimatedDays: integer("estimated_days"),
+  deliverables: text("deliverables").notNull().default("[]"), // JSON string[]
+  pricingStrategy: text("pricing_strategy"), // no_price | starting_price | mention_price
   model: text("model").notNull(),
   inputHash: text("input_hash").notNull(), // for cache-skip on re-runs with unchanged evidence
   analyzedAt: integer("analyzed_at").notNull(),
+});
+
+export const deals = sqliteTable("deals", {
+  id: text("id").primaryKey(),
+  leadId: text("lead_id")
+    .notNull()
+    .unique()
+    .references(() => leads.id, { onDelete: "cascade" }),
+  service: text("service").notNull(),
+  complexity: text("complexity").notNull(), // low | medium | high
+  estimatedDays: integer("estimated_days").notNull(),
+  priceBreakdown: text("price_breakdown").notNull().default("[]"), // JSON {label, amount}[]
+  recommendedPrice: integer("recommended_price").notNull(),
+  minPrice: integer("min_price").notNull(),
+  currentPrice: integer("current_price").notNull(), // recommendedPrice until overridden
+  priceConfidence: text("price_confidence").notNull(), // high | medium | low
+  pricingStrategy: text("pricing_strategy").notNull(), // no_price | starting_price | mention_price
+  status: text("status").notNull().default("estimated"),
+  // estimated -> proposed -> negotiating -> won -> invoiced -> partially_paid -> paid
+  // (or -> lost at any point)
+  amountPaid: integer("amount_paid").notNull().default(0),
+  wonAt: integer("won_at"),
+  paidAt: integer("paid_at"),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
 });
 
 export const settings = sqliteTable("settings", {
@@ -89,4 +118,6 @@ export const settings = sqliteTable("settings", {
   automationEnabled: integer("automation_enabled", { mode: "boolean" }).notNull().default(false),
   automationIntervalMinutes: integer("automation_interval_minutes").notNull().default(360),
   lastAutoRunAt: integer("last_auto_run_at"),
+  servicePricing: text("service_pricing").notNull().default("{}"), // JSON {[service]: basePrice}
+  monthlyTarget: integer("monthly_target").notNull().default(25000),
 });

@@ -1,12 +1,16 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { getLatestOutreachForLeads, getLeads } from "@/lib/data";
+import { getDealsForLeads, getLatestOutreachForLeads, getLeads } from "@/lib/data";
 import { LeadsFilterBar } from "@/components/leads-filter-bar";
 import { ScoreBadge, SourceBadge, StatusPill } from "@/components/badges";
 import { DismissButton } from "@/components/dismiss-button";
 import { timeAgo } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
+
+function formatInr(n: number): string {
+  return `₹${n.toLocaleString("en-IN")}`;
+}
 
 export default async function LeadsPage({
   searchParams,
@@ -18,12 +22,26 @@ export default async function LeadsPage({
 
   const leads = getLeads({ status, source, q });
   const outreachByLead = getLatestOutreachForLeads(leads.map((l) => l.id));
+  const dealsByLead = getDealsForLeads(leads.map((l) => l.id));
+  const pipelineValue = [...dealsByLead.values()]
+    .filter((d) => ["estimated", "proposed", "negotiating"].includes(d.status))
+    .reduce((sum, d) => sum + d.currentPrice, 0);
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-[32px] font-extrabold tracking-tight">Opportunities</h1>
-        <p className="mt-1 text-[13.5px] text-muted">{leads.length} matching this filter.</p>
+      <div className="flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-[32px] font-extrabold tracking-tight">Opportunities</h1>
+          <p className="mt-1 text-[13.5px] text-muted">{leads.length} matching this filter.</p>
+        </div>
+        {pipelineValue > 0 && (
+          <div className="text-right">
+            <div className="text-[11px] font-semibold text-muted-2 uppercase tracking-wide">
+              Pipeline value
+            </div>
+            <div className="text-[22px] font-extrabold text-green">{formatInr(pipelineValue)}</div>
+          </div>
+        )}
       </div>
 
       <Suspense>
@@ -37,6 +55,7 @@ export default async function LeadsPage({
           <div className="divide-y divide-border">
             {leads.map((lead) => {
               const draft = outreachByLead.get(lead.id);
+              const deal = dealsByLead.get(lead.id);
               return (
                 <Link
                   key={lead.id}
@@ -55,6 +74,11 @@ export default async function LeadsPage({
                     </div>
                     <div className="font-mono text-[11.5px] text-muted-2 truncate">{lead.domain}</div>
                   </div>
+                  {deal && (
+                    <span className="hidden md:inline font-bold text-[13px] text-green shrink-0">
+                      {formatInr(deal.currentPrice)}
+                    </span>
+                  )}
                   <div className="hidden sm:block shrink-0">
                     <SourceBadge source={lead.source} />
                   </div>

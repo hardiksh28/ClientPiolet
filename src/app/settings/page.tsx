@@ -3,6 +3,7 @@ import { SettingsForm } from "@/components/settings-form";
 import { GmailConnect } from "@/components/gmail-connect";
 import { GroqStatus } from "@/components/groq-status";
 import { AutomationSettings } from "@/components/automation-settings";
+import { PricingSettings } from "@/components/pricing-settings";
 import { isGmailConfigured } from "@/lib/gmail/oauth";
 import { isGroqConfigured } from "@/lib/ai/groq";
 
@@ -36,6 +37,12 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
         enabled={settings.automationEnabled}
         intervalMinutes={settings.automationIntervalMinutes}
         lastAutoRunAt={settings.lastAutoRunAt}
+      />
+
+      <PricingSettings
+        services={JSON.parse(settings.services)}
+        initialPricing={JSON.parse(settings.servicePricing)}
+        initialTarget={settings.monthlyTarget}
       />
 
       <SettingsForm

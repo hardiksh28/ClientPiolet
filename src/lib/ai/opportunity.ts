@@ -19,7 +19,7 @@ export function opportunityInputHash(input: OpportunityInput): string {
   return createHash("sha256").update(JSON.stringify(input)).digest("hex");
 }
 
-const SYSTEM_PROMPT = `You assess whether a company is a realistic outreach opportunity for a freelance web developer (Hardik), based ONLY on the structured evidence provided by the user message.
+const SYSTEM_PROMPT = `You assess whether a company is a realistic outreach opportunity for a freelance web developer (Hardik), based ONLY on the structured evidence provided by the user message. You also assess project scope — but you never set a price. A separate deterministic calculator turns your scope assessment into a number from Hardik's own rate card; your job stops at complexity/estimatedDays/deliverables.
 
 Rules, no exceptions:
 - Use ONLY the facts given to you. Never invent details about the company, its traffic, revenue, growth, team size, funding, or customers that were not provided.
@@ -27,7 +27,9 @@ Rules, no exceptions:
 - "qualified: true" requires an actual reason tied to the given evidence, not just "the website has problems" — a bad website alone is not a business opportunity without a reason the timing matters.
 - If nothing in the evidence gives a real "why now", set qualified to false and confidence to low rather than inventing urgency.
 - evidence[] must each be a specific, checkable observation traceable to the input — not a generic claim.
-- service must be exactly one of the enabledServices given, or the literal string "none".`;
+- service must be exactly one of the enabledServices given, or the literal string "none".
+- complexity/estimatedDays/deliverables should reflect only the scope implied by the detected problems and service — don't inflate it to justify a bigger number, you aren't setting the number anyway.
+- pricingStrategy should default toward "no_price" for anything short of a very clear-cut, well-understood scope — cold first contact should rarely lead with a price before interest is established.`;
 
 /**
  * Runs the AI opportunity analysis for one lead. Returns null on any

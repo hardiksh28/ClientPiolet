@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import path from "node:path";
 import * as schema from "./schema";
+import { DEFAULT_SERVICE_PRICING } from "../pricing/catalog";
 
 const DB_PATH = path.join(process.cwd(), "clientpilot.db");
 
@@ -87,6 +88,26 @@ CREATE TABLE IF NOT EXISTS ai_analysis (
   analyzed_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS deals (
+  id TEXT PRIMARY KEY,
+  lead_id TEXT NOT NULL UNIQUE REFERENCES leads(id) ON DELETE CASCADE,
+  service TEXT NOT NULL,
+  complexity TEXT NOT NULL,
+  estimated_days INTEGER NOT NULL,
+  price_breakdown TEXT NOT NULL DEFAULT '[]',
+  recommended_price INTEGER NOT NULL,
+  min_price INTEGER NOT NULL,
+  current_price INTEGER NOT NULL,
+  price_confidence TEXT NOT NULL,
+  pricing_strategy TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'estimated',
+  amount_paid INTEGER NOT NULL DEFAULT 0,
+  won_at INTEGER,
+  paid_at INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   id INTEGER PRIMARY KEY DEFAULT 1,
   services TEXT NOT NULL DEFAULT '[]',
@@ -97,13 +118,17 @@ CREATE TABLE IF NOT EXISTS settings (
   sender_name TEXT NOT NULL DEFAULT 'Hardik',
   automation_enabled INTEGER NOT NULL DEFAULT 0,
   automation_interval_minutes INTEGER NOT NULL DEFAULT 360,
-  last_auto_run_at INTEGER
+  last_auto_run_at INTEGER,
+  service_pricing TEXT NOT NULL DEFAULT '{}',
+  monthly_target INTEGER NOT NULL DEFAULT 25000
 );
 
 CREATE INDEX IF NOT EXISTS idx_leads_status_score ON leads(status, score DESC);
 CREATE INDEX IF NOT EXISTS idx_leads_domain ON leads(domain);
 CREATE INDEX IF NOT EXISTS idx_outreach_lead ON outreach(lead_id);
 CREATE INDEX IF NOT EXISTS idx_ai_analysis_lead ON ai_analysis(lead_id);
+CREATE INDEX IF NOT EXISTS idx_deals_lead ON deals(lead_id);
+CREATE INDEX IF NOT EXISTS idx_deals_status ON deals(status);
 `);
 
 // Lightweight migrations: add columns that didn't exist in earlier versions
@@ -127,20 +152,41 @@ if (!settingsColumnNames.has("automation_interval_minutes")) {
 if (!settingsColumnNames.has("last_auto_run_at")) {
   sqlite.exec("ALTER TABLE settings ADD COLUMN last_auto_run_at INTEGER");
 }
+if (!settingsColumnNames.has("service_pricing")) {
+  sqlite.exec("ALTER TABLE settings ADD COLUMN service_pricing TEXT NOT NULL DEFAULT '{}'");
+}
+if (!settingsColumnNames.has("monthly_target")) {
+  sqlite.exec("ALTER TABLE settings ADD COLUMN monthly_target INTEGER NOT NULL DEFAULT 25000");
+}
 
 const outreachColumns = sqlite.prepare("PRAGMA table_info(outreach)").all() as { name: string }[];
 if (!outreachColumns.some((c) => c.name === "reply_snippet")) {
   sqlite.exec("ALTER TABLE outreach ADD COLUMN reply_snippet TEXT");
 }
 
+const aiAnalysisColumns = sqlite.prepare("PRAGMA table_info(ai_analysis)").all() as { name: string }[];
+const aiAnalysisColumnNames = new Set(aiAnalysisColumns.map((c) => c.name));
+if (!aiAnalysisColumnNames.has("complexity")) {
+  sqlite.exec("ALTER TABLE ai_analysis ADD COLUMN complexity TEXT");
+}
+if (!aiAnalysisColumnNames.has("estimated_days")) {
+  sqlite.exec("ALTER TABLE ai_analysis ADD COLUMN estimated_days INTEGER");
+}
+if (!aiAnalysisColumnNames.has("deliverables")) {
+  sqlite.exec("ALTER TABLE ai_analysis ADD COLUMN deliverables TEXT NOT NULL DEFAULT '[]'");
+}
+if (!aiAnalysisColumnNames.has("pricing_strategy")) {
+  sqlite.exec("ALTER TABLE ai_analysis ADD COLUMN pricing_strategy TEXT");
+}
+
 const settingsRow = sqlite
-  .prepare("SELECT id FROM settings WHERE id = 1")
-  .get();
+  .prepare("SELECT id, service_pricing FROM settings WHERE id = 1")
+  .get() as { id: number; service_pricing: string } | undefined;
 if (!settingsRow) {
   sqlite
     .prepare(
-      `INSERT INTO settings (id, services, countries, min_score, daily_limit, portfolio_url, sender_name)
-       VALUES (1, ?, ?, 70, 20, '', 'Hardik')`
+      `INSERT INTO settings (id, services, countries, min_score, daily_limit, portfolio_url, sender_name, service_pricing, monthly_target)
+       VALUES (1, ?, ?, 70, 20, '', 'Hardik', ?, 25000)`
     )
     .run(
       JSON.stringify([
@@ -150,8 +196,14 @@ if (!settingsRow) {
         "SEO Basics",
         "Trust & Conversion",
       ]),
-      JSON.stringify(["USA", "UK", "India", "Canada", "Europe"])
+      JSON.stringify(["USA", "UK", "India", "Canada", "Europe"]),
+      JSON.stringify(DEFAULT_SERVICE_PRICING)
     );
+} else if (!settingsRow.service_pricing || settingsRow.service_pricing === "{}") {
+  // Backfill for installs that existed before pricing was added.
+  sqlite
+    .prepare("UPDATE settings SET service_pricing = ? WHERE id = 1")
+    .run(JSON.stringify(DEFAULT_SERVICE_PRICING));
 }
 
 export const db = drizzle(sqlite, { schema });

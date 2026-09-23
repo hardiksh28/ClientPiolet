@@ -1,6 +1,6 @@
 import { desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { aiAnalysis, audits, contacts, leads, outreach, settings as settingsTable } from "@/lib/db/schema";
+import { aiAnalysis, audits, contacts, deals, leads, outreach, settings as settingsTable } from "@/lib/db/schema";
 
 export type LeadRow = typeof leads.$inferSelect;
 export type AuditRow = typeof audits.$inferSelect;
@@ -8,6 +8,7 @@ export type ContactRow = typeof contacts.$inferSelect;
 export type OutreachRow = typeof outreach.$inferSelect;
 export type SettingsRow = typeof settingsTable.$inferSelect;
 export type AiAnalysisRow = typeof aiAnalysis.$inferSelect;
+export type DealRow = typeof deals.$inferSelect;
 
 export function getSettings(): SettingsRow {
   const row = db.select().from(settingsTable).where(eq(settingsTable.id, 1)).get();
@@ -165,13 +166,21 @@ export function getLeadDetail(id: string) {
     .where(eq(aiAnalysis.leadId, id))
     .orderBy(desc(aiAnalysis.analyzedAt))
     .get();
+  const deal = db.select().from(deals).where(eq(deals.leadId, id)).get();
   return {
     lead,
     audit: audit ?? null,
     contact: contact ?? null,
     outreach: outreachRow ?? null,
     ai: ai ?? null,
+    deal: deal ?? null,
   };
+}
+
+export function getDealsForLeads(leadIds: string[]): Map<string, DealRow> {
+  if (leadIds.length === 0) return new Map();
+  const rows = db.select().from(deals).where(inArray(deals.leadId, leadIds)).all();
+  return new Map(rows.map((d) => [d.leadId, d]));
 }
 
 function startOfDay(ts = Date.now()): number {
@@ -407,6 +416,87 @@ export function getInsights(): string[] {
   }
 
   return insights;
+}
+
+export type DealListItem = { lead: LeadRow; deal: DealRow };
+
+const ACTIVE_DEAL_STATUSES = ["estimated", "proposed", "negotiating"];
+const OPEN_DEAL_STATUSES = [...ACTIVE_DEAL_STATUSES, "won", "invoiced", "partially_paid"];
+
+export function getEarningsSummary() {
+  const allDeals = db.select().from(deals).all();
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+
+  const totalEarned = allDeals.reduce((sum, d) => sum + d.amountPaid, 0);
+  const earnedThisMonth = allDeals
+    .filter((d) => d.paidAt && d.paidAt >= monthStart)
+    .reduce((sum, d) => sum + d.amountPaid, 0);
+
+  const pipelineValue = allDeals
+    .filter((d) => ACTIVE_DEAL_STATUSES.includes(d.status))
+    .reduce((sum, d) => sum + d.currentPrice, 0);
+  const activeCount = allDeals.filter((d) => ACTIVE_DEAL_STATUSES.includes(d.status)).length;
+
+  const pendingPayment = allDeals
+    .filter((d) => d.status === "invoiced" || d.status === "partially_paid")
+    .reduce((sum, d) => sum + (d.currentPrice - d.amountPaid), 0);
+
+  const wonTotal = allDeals
+    .filter((d) => OPEN_DEAL_STATUSES.includes(d.status) && d.status !== "estimated")
+    .reduce((sum, d) => sum + d.currentPrice, 0);
+
+  // Monthly earned totals for the last 6 months, oldest first — real
+  // history from paidAt timestamps, not synthetic/interpolated data. A
+  // month with nothing paid is genuinely 0, shown as such.
+  const months: { label: string; total: number }[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const start = d.getTime();
+    const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1).getTime();
+    const total = allDeals
+      .filter((deal) => deal.paidAt && deal.paidAt >= start && deal.paidAt < end)
+      .reduce((sum, deal) => sum + deal.amountPaid, 0);
+    months.push({ label: d.toLocaleString("en-US", { month: "short" }), total });
+  }
+
+  return {
+    totalEarned,
+    earnedThisMonth,
+    pipelineValue,
+    activeCount,
+    pendingPayment,
+    wonTotal,
+    months,
+  };
+}
+
+export function getDealsList(): DealListItem[] {
+  const rows = db.select().from(deals).orderBy(desc(deals.updatedAt)).all();
+  const leadIds = rows.map((d) => d.leadId);
+  const leadRows = leadIds.length ? db.select().from(leads).where(inArray(leads.id, leadIds)).all() : [];
+  const leadById = new Map(leadRows.map((l) => [l.id, l]));
+  return rows.flatMap((deal) => {
+    const lead = leadById.get(deal.leadId);
+    return lead ? [{ lead, deal }] : [];
+  });
+}
+
+/** Average won price per service — only returned once there's at least one
+ * won deal for that service. No zero-based or extrapolated averages. */
+export function getHistoricalAveragesByService(): { service: string; avg: number; count: number }[] {
+  const won = db.select().from(deals).where(sql`${deals.status} != 'estimated' and ${deals.wonAt} is not null`).all();
+  const bySvc = new Map<string, number[]>();
+  for (const d of won) {
+    const arr = bySvc.get(d.service) ?? [];
+    arr.push(d.currentPrice);
+    bySvc.set(d.service, arr);
+  }
+  return [...bySvc.entries()].map(([service, prices]) => ({
+    service,
+    avg: Math.round(prices.reduce((a, b) => a + b, 0) / prices.length),
+    count: prices.length,
+  }));
 }
 
 export function getAnalytics() {

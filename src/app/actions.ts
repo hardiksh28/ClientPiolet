@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { leads, outreach, settings as settingsTable } from "@/lib/db/schema";
+import { deals, leads, outreach, settings as settingsTable } from "@/lib/db/schema";
 import { reconsiderArchivedLeads, runPipeline } from "@/lib/pipeline/run";
 import { syncGmailReplies, type GmailSyncResult } from "@/lib/pipeline/gmail-sync";
 import { draftFollowup } from "@/lib/pipeline/draft";
@@ -155,4 +155,73 @@ export async function updateSettingsAction(data: {
   revalidatePath("/leads");
   revalidatePath("/analytics");
   return result;
+}
+
+export async function updatePricingSettingsAction(data: {
+  servicePricing: Record<string, number>;
+  monthlyTarget: number;
+}) {
+  db.update(settingsTable)
+    .set({
+      servicePricing: JSON.stringify(data.servicePricing),
+      monthlyTarget: data.monthlyTarget,
+    })
+    .where(eq(settingsTable.id, 1))
+    .run();
+  revalidatePath("/settings");
+  revalidatePath("/earnings");
+}
+
+export async function overrideDealPriceAction(dealId: string, newPrice: number) {
+  db.update(deals)
+    .set({ currentPrice: newPrice, updatedAt: Date.now() })
+    .where(eq(deals.id, dealId))
+    .run();
+  revalidatePath("/leads");
+  revalidatePath("/earnings");
+}
+
+export type DealStatus =
+  | "estimated"
+  | "proposed"
+  | "negotiating"
+  | "won"
+  | "invoiced"
+  | "partially_paid"
+  | "paid"
+  | "lost";
+
+export async function advanceDealStatusAction(dealId: string, status: DealStatus) {
+  const now = Date.now();
+  const patch: Partial<typeof deals.$inferInsert> = { status, updatedAt: now };
+  if (status === "won") patch.wonAt = now;
+  if (status === "paid") {
+    patch.paidAt = now;
+    const deal = db.select().from(deals).where(eq(deals.id, dealId)).get();
+    if (deal) patch.amountPaid = deal.currentPrice;
+  }
+  db.update(deals).set(patch).where(eq(deals.id, dealId)).run();
+  revalidatePath("/leads");
+  revalidatePath("/earnings");
+  revalidatePath("/pipeline");
+}
+
+export async function recordPaymentAction(dealId: string, amount: number) {
+  const deal = db.select().from(deals).where(eq(deals.id, dealId)).get();
+  if (!deal) throw new Error("Deal not found");
+  const now = Date.now();
+  const totalPaid = deal.amountPaid + amount;
+  const status = totalPaid >= deal.currentPrice ? "paid" : "partially_paid";
+  db.update(deals)
+    .set({
+      amountPaid: totalPaid,
+      status,
+      paidAt: status === "paid" ? now : deal.paidAt,
+      updatedAt: now,
+    })
+    .where(eq(deals.id, dealId))
+    .run();
+  revalidatePath("/leads");
+  revalidatePath("/earnings");
+  revalidatePath("/pipeline");
 }
