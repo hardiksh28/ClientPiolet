@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { MessageSquareOff } from "lucide-react";
 import { getInboxReplies, getSettings } from "@/lib/data";
+import { isGmailConfigured } from "@/lib/gmail/oauth";
 import { SourceBadge } from "@/components/badges";
 import { SyncRepliesButton } from "@/components/sync-replies-button";
+import { GmailConnect } from "@/components/gmail-connect";
+import { MarkReadButton } from "@/components/mark-read-button";
 import { cn, timeAgo } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +30,9 @@ const CLASS_LABEL: Record<string, string> = {
 
 export default async function InboxPage() {
   const replies = getInboxReplies();
-  const gmailConnected = !!getSettings().gmailConnectedEmail;
+  const settings = getSettings();
+  const gmailConnected = !!settings.gmailConnectedEmail;
+  const unreadCount = replies.filter((r) => !r.outreach.readAt).length;
 
   return (
     <div className="space-y-5">
@@ -35,11 +40,27 @@ export default async function InboxPage() {
         <div>
           <h1 className="text-[32px] font-extrabold tracking-tight">Inbox</h1>
           <p className="mt-1 text-[13.5px] text-muted">
-            {replies.length} repl{replies.length === 1 ? "y" : "ies"} across every lead you&apos;ve sent to.
+            {replies.length} repl{replies.length === 1 ? "y" : "ies"} across every lead you&apos;ve sent to
+            {unreadCount > 0 && (
+              <>
+                {" "}
+                · <span className="font-semibold text-foreground">{unreadCount} unread</span>
+              </>
+            )}
+            .
           </p>
         </div>
         <SyncRepliesButton connected={gmailConnected} />
       </div>
+
+      {!gmailConnected && (
+        <GmailConnect
+          configured={isGmailConfigured()}
+          connectedEmail={null}
+          justConnected={false}
+          error={null}
+        />
+      )}
 
       {replies.length === 0 ? (
         <div className="rounded-[20px] bg-surface px-6 py-14 text-center">
@@ -51,40 +72,52 @@ export default async function InboxPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {replies.map(({ lead, outreach }) => (
-            <Link
-              key={outreach.id}
-              href={`/leads/${lead.id}`}
-              className="block rounded-[20px] bg-surface p-4 hover:brightness-110 transition"
-            >
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-bold text-[14px] truncate">{lead.company}</span>
-                  <SourceBadge source={lead.source} />
-                </div>
-                <span className="text-[11px] text-muted-2 shrink-0">
-                  {outreach.repliedAt ? timeAgo(outreach.repliedAt) : ""}
-                </span>
-              </div>
-              {outreach.replySnippet ? (
-                <p className="text-[13px] text-muted leading-relaxed mb-2 line-clamp-2">
-                  &ldquo;{outreach.replySnippet}&rdquo;
-                </p>
-              ) : (
-                <p className="text-[12px] text-muted-2 italic mb-2">
-                  Marked replied manually — no reply text captured.
-                </p>
-              )}
-              <span
+          {replies.map(({ lead, outreach }) => {
+            const unread = !outreach.readAt;
+            return (
+              <Link
+                key={outreach.id}
+                href={`/leads/${lead.id}`}
                 className={cn(
-                  "inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold",
-                  CLASS_STYLE[outreach.replyClass ?? "auto"]
+                  "block rounded-[20px] bg-surface p-4 hover:brightness-110 transition",
+                  unread && "ring-1 ring-inset ring-blue/40"
                 )}
               >
-                {CLASS_LABEL[outreach.replyClass ?? "auto"]}
-              </span>
-            </Link>
-          ))}
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {unread && <span className="h-2 w-2 shrink-0 rounded-full bg-blue" />}
+                    <span className={cn("text-[14px] truncate", unread ? "font-extrabold" : "font-bold")}>
+                      {lead.company}
+                    </span>
+                    <SourceBadge source={lead.source} />
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[11px] text-muted-2">
+                      {outreach.repliedAt ? timeAgo(outreach.repliedAt) : ""}
+                    </span>
+                    <MarkReadButton outreachId={outreach.id} read={!unread} />
+                  </div>
+                </div>
+                {outreach.replySnippet ? (
+                  <p className="text-[13px] text-muted leading-relaxed mb-2 line-clamp-2">
+                    &ldquo;{outreach.replySnippet}&rdquo;
+                  </p>
+                ) : (
+                  <p className="text-[12px] text-muted-2 italic mb-2">
+                    Marked replied manually — no reply text captured.
+                  </p>
+                )}
+                <span
+                  className={cn(
+                    "inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold",
+                    CLASS_STYLE[outreach.replyClass ?? "auto"]
+                  )}
+                >
+                  {CLASS_LABEL[outreach.replyClass ?? "auto"]}
+                </span>
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>

@@ -163,6 +163,9 @@ const outreachColumns = sqlite.prepare("PRAGMA table_info(outreach)").all() as {
 if (!outreachColumns.some((c) => c.name === "reply_snippet")) {
   sqlite.exec("ALTER TABLE outreach ADD COLUMN reply_snippet TEXT");
 }
+if (!outreachColumns.some((c) => c.name === "read_at")) {
+  sqlite.exec("ALTER TABLE outreach ADD COLUMN read_at INTEGER");
+}
 
 const leadsColumns = sqlite.prepare("PRAGMA table_info(leads)").all() as { name: string }[];
 if (!leadsColumns.some((c) => c.name === "score_breakdown")) {

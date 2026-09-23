@@ -62,6 +62,15 @@ export async function dismissLeadAction(leadId: string) {
   revalidatePath(`/leads/${leadId}`);
 }
 
+export async function setOutreachReadAction(outreachId: string, read: boolean) {
+  db.update(outreach)
+    .set({ readAt: read ? Date.now() : null })
+    .where(eq(outreach.id, outreachId))
+    .run();
+  revalidatePath("/");
+  revalidatePath("/inbox");
+}
+
 export async function markRepliedAction(
   leadId: string,
   outreachId: string,

@@ -307,14 +307,12 @@ export function getOutreachList(filter?: { status?: "draft" | "sent" | "replied"
 
 export type InboxReplyItem = { lead: LeadRow; outreach: OutreachRow };
 
-/** Recent-enough-to-still-matter reply count, used for the sidebar badge —
- * there's no read/unread tracking, so "recent" (7 days) stands in for it. */
+/** Unread reply count, used for the sidebar badge. */
 export function getRecentInboxCount(): number {
-  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const row = db
     .select({ c: sql<number>`count(*)` })
     .from(outreach)
-    .where(sql`${outreach.repliedAt} is not null and ${outreach.repliedAt} >= ${weekAgo}`)
+    .where(sql`${outreach.repliedAt} is not null and ${outreach.readAt} is null`)
     .get();
   return Number(row?.c ?? 0);
 }

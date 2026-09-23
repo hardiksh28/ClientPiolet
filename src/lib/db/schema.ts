@@ -57,6 +57,7 @@ export const outreach = sqliteTable("outreach", {
   repliedAt: integer("replied_at"),
   replyClass: text("reply_class"), // hot | interested | maybe | not_now | no | auto
   replySnippet: text("reply_snippet"), // captured from Gmail sync only; null for manual marks
+  readAt: integer("read_at"), // null = unread; set when marked read on the Inbox page
 });
 
 export const aiAnalysis = sqliteTable("ai_analysis", {
