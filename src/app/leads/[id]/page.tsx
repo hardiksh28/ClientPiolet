@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ExternalLink, Globe, User } from "lucide-react";
+import { ArrowLeft, ExternalLink, Flame, Globe, User } from "lucide-react";
 import { getLeadDetail } from "@/lib/data";
 import { ScoreBadge, SourceBadge, StatusPill, ProblemTag } from "@/components/badges";
 import { OutreachPanel } from "@/components/outreach-panel";
 import { AiOpportunityCard } from "@/components/ai-opportunity-card";
+import { BuyingSignals } from "@/components/buying-signals";
 import { PricingCard } from "@/components/pricing-card";
+import { computeSignals } from "@/lib/pipeline/signals";
+import type { Source } from "@/lib/pipeline/types";
 import { timeAgo, SOURCE_LABEL } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +23,7 @@ export default async function LeadDetailPage({ params }: PageProps<"/leads/[id]"
     : [];
   const tech: string[] = audit ? JSON.parse(audit.tech) : [];
   const meta = JSON.parse(lead.sourceMeta) as Record<string, unknown>;
+  const signals = computeSignals(lead.source as Source, meta);
 
   return (
     <div className="space-y-6">
@@ -65,10 +69,24 @@ export default async function LeadDetailPage({ params }: PageProps<"/leads/[id]"
         </div>
       )}
 
+      {ai?.whyNow && (
+        <div className="rounded-[20px] bg-green-soft px-5 py-4 flex items-start gap-3">
+          <Flame size={18} className="text-green shrink-0 mt-0.5" />
+          <div>
+            <div className="text-[11px] font-bold text-green uppercase tracking-wide mb-0.5">
+              Why now
+            </div>
+            <p className="text-[14px] font-medium leading-relaxed">{ai.whyNow}</p>
+          </div>
+        </div>
+      )}
+
       {ai && <AiOpportunityCard ai={ai} />}
 
       <div className="grid lg:grid-cols-5 gap-5">
         <div className="lg:col-span-2 space-y-4">
+          <BuyingSignals signals={signals} />
+
           <div className="rounded-[20px] bg-surface p-4">
             <div className="text-[12px] font-bold text-muted-2 uppercase tracking-wide mb-2.5">
               Evidence
@@ -138,6 +156,8 @@ export default async function LeadDetailPage({ params }: PageProps<"/leads/[id]"
                   <User size={14} />
                 </div>
                 <div className="min-w-0">
+                  {contact.name && <div className="text-[12.5px] font-semibold truncate">{contact.name}</div>}
+                  {contact.role && <div className="text-[11.5px] text-muted truncate">{contact.role}</div>}
                   <div className="font-mono text-[12.5px] truncate">{contact.email}</div>
                   <div className="text-[11px] text-muted-2 capitalize">{contact.confidence} confidence</div>
                 </div>

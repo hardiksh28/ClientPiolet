@@ -30,19 +30,11 @@ export function AiOpportunityCard({ ai }: { ai: AiAnalysisRow }) {
 
       <p className="text-[13.5px] leading-relaxed mb-3">{ai.summary}</p>
 
-      <div className="grid sm:grid-cols-2 gap-3 mb-3">
-        <div>
-          <div className="text-[11px] font-bold text-muted-2 uppercase tracking-wide mb-1">
-            Opportunity
-          </div>
-          <div className="text-[13px] font-semibold">{ai.opportunity}</div>
+      <div className="mb-3">
+        <div className="text-[11px] font-bold text-muted-2 uppercase tracking-wide mb-1">
+          Opportunity
         </div>
-        <div>
-          <div className="text-[11px] font-bold text-muted-2 uppercase tracking-wide mb-1">
-            Why now
-          </div>
-          <div className="text-[13px]">{ai.whyNow}</div>
-        </div>
+        <div className="text-[13px] font-semibold">{ai.opportunity}</div>
       </div>
 
       {evidence.length > 0 && (

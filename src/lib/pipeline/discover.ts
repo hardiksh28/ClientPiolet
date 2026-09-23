@@ -1,8 +1,18 @@
+import * as cheerio from "cheerio";
 import { fetchJson, fetchWithTimeout, USER_AGENT } from "./http";
 import type { RawLead } from "./types";
 
 const FRONTEND_ROLE_RE =
   /\b(frontend|front-end|front end|react|next\.?js|webflow|landing page|web designer|ui\/ux|ui engineer|web developer)\b/i;
+
+// Job board descriptions come as HTML — strip tags so the AI reads plain
+// text, and cap length so one job posting can't blow out the AI payload.
+function plainTextDescription(html: string | undefined, maxLen = 500): string | undefined {
+  if (!html) return undefined;
+  const text = cheerio.load(html)("body").text().replace(/\s+/g, " ").trim();
+  if (!text) return undefined;
+  return text.length > maxLen ? `${text.slice(0, maxLen)}…` : text;
+}
 
 // ---------- 1. Job boards (highest buying intent — hiring = budget) ----------
 
@@ -11,6 +21,8 @@ type RemotiveJob = {
   title: string;
   candidate_required_location?: string;
   url: string;
+  publication_date?: string;
+  description?: string;
 };
 
 async function discoverRemotive(limit: number): Promise<RawLead[]> {
@@ -30,6 +42,8 @@ async function discoverRemotive(limit: number): Promise<RawLead[]> {
         board: "remotive",
         role: job.title,
         jobUrl: job.url,
+        postedAt: job.publication_date,
+        jobDescription: plainTextDescription(job.description),
       },
     });
     if (leads.length >= limit) break;
@@ -43,6 +57,8 @@ type RemoteOkJob = {
   tags?: string[];
   url?: string;
   company_logo?: string;
+  date?: string;
+  description?: string;
 };
 
 async function discoverRemoteOk(limit: number): Promise<RawLead[]> {
@@ -70,6 +86,8 @@ async function discoverRemoteOk(limit: number): Promise<RawLead[]> {
         role: job.position,
         jobUrl: job.url,
         tags: job.tags,
+        postedAt: job.date,
+        jobDescription: plainTextDescription(job.description),
       },
     });
     if (leads.length >= limit) break;
@@ -182,6 +200,7 @@ type GhRepo = {
   homepage: string | null;
   html_url: string;
   language: string | null;
+  pushed_at: string | null;
 };
 
 // Several topic queries, rotated by the hour so consecutive runs don't just
@@ -236,6 +255,7 @@ export async function discoverGithub(limit = 8): Promise<RawLead[]> {
         repoUrl: repo.html_url,
         language: repo.language,
         orgEmail: org?.email ?? undefined,
+        pushedAt: repo.pushed_at ?? undefined,
       },
     });
     if (leads.length >= limit) break;

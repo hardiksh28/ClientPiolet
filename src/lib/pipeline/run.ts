@@ -13,6 +13,7 @@ import { discoverDirectories, discoverGithub, discoverJobBoards, discoverProduct
 import { draftEmail } from "./draft";
 import { resolveLeads } from "./resolve";
 import { scoreLead, TAG_TO_SERVICE } from "./score";
+import { computeSignals } from "./signals";
 import type { AuditResult, ContactResult, PipelineRunSummary, RawLead, Source } from "./types";
 
 /**
@@ -222,6 +223,15 @@ export async function runPipeline(): Promise<PipelineRunSummary> {
           };
         }
       }
+      // The Show HN poster is the person who publicly announced this launch —
+      // a fact regardless of whether they're the site's contact address, so
+      // it's safe to attach as role context without claiming it's their name.
+      if (contact && lead.source === "directory" && lead.sourceMeta.listing === "show_hn") {
+        const author = lead.sourceMeta.author;
+        if (typeof author === "string" && author) {
+          contact = { ...contact, role: `Show HN poster (@${author})` };
+        }
+      }
 
       const score = scoreLead(lead.source, audit, contact, enabledServices);
       const noContact = !contact;
@@ -253,6 +263,7 @@ export async function runPipeline(): Promise<PipelineRunSummary> {
           h1: audit.h1,
           metaDescription: audit.metaDesc,
           problems: audit.problems,
+          signals: computeSignals(lead.source, lead.sourceMeta, now),
           enabledServices,
         };
         aiInputHash = opportunityInputHash(aiInput);

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { GROQ_MODEL_HEAVY, groqStructuredCompletion } from "./groq";
 import { OPPORTUNITY_ANALYSIS_SCHEMA, type OpportunityAnalysis } from "./schemas";
 import type { Problem, Source } from "@/lib/pipeline/types";
+import type { Signal } from "@/lib/pipeline/signals";
 
 export type OpportunityInput = {
   company: string;
@@ -12,6 +13,7 @@ export type OpportunityInput = {
   h1: string | null;
   metaDescription: string | null;
   problems: Problem[];
+  signals: Signal[];
   enabledServices: string[];
 };
 
@@ -25,6 +27,8 @@ Rules, no exceptions:
 - Use ONLY the facts given to you. Never invent details about the company, its traffic, revenue, growth, team size, funding, or customers that were not provided.
 - Do not claim to have observed anything you were not given (no "I noticed your company is growing rapidly" unless growth data was actually provided).
 - "qualified: true" requires an actual reason tied to the given evidence, not just "the website has problems" — a bad website alone is not a business opportunity without a reason the timing matters.
+- signals[] each carry a freshness label ("fresh" = days old, "recent" = ~2 weeks, "aging" = ~1-6 weeks, "unknown" = no reliable date). A "fresh" signal is a much stronger reason to reach out now than an "aging" or "unknown" one — if the only signal you have is "aging" or "unknown", be more conservative about urgency and confidence rather than claiming timing you can't support.
+- If a signal has a jobDescription, use what the role actually asks for (not just its title) when reasoning about the opportunity and writing evidence — a role about "improving our marketing site" is a much better signal than a generic "Frontend Engineer" title.
 - If nothing in the evidence gives a real "why now", set qualified to false and confidence to low rather than inventing urgency.
 - evidence[] must each be a specific, checkable observation traceable to the input — not a generic claim.
 - service must be exactly one of the enabledServices given, or the literal string "none".
@@ -49,6 +53,7 @@ export async function analyzeOpportunity(
       h1: input.h1,
       metaDescription: input.metaDescription,
       detectedProblems: input.problems.map((p) => ({ tag: p.tag, evidence: p.evidence })),
+      signals: input.signals,
       enabledServices: input.enabledServices,
     },
     null,
